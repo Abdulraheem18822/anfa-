@@ -7,7 +7,7 @@ export const initialStoreSettings: StoreSettings = {
   currencySymbol: '₹',
   freeDeliveryThreshold: 0,
   phone: '+91 9603344954',
-  email: 'support.store01@gmail.com',
+  email: 'anfa.store01@gmail.com',
   address: 'Nilofar complex, main road, cloth market, Bhainsa, Telangana, 504103',
   workingHours: 'Monday - Saturday / 10:00 AM - 08:00 PM IST',
   copyrightYear: 2026,

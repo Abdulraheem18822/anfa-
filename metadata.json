@@ -1,6 +1,6 @@
 {
-  "name": "Anfa Print Wear - Print On Demand T-Shirts",
-  "description": "Print-on-demand custom t-shirt ecommerce storefront with interactive customizer, product catalog, customer care center, and contact forms.",
+  "name": "ANFA PRINT WEAR",
+  "description": "ANFA PRINT WEAR - Premium Print On Demand T-Shirts & Custom Apparel Storefront",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -186,25 +186,25 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 md:p-6 select-none animate-fade-in">
-      <div className="bg-white rounded-2xl max-w-5xl w-full overflow-hidden shadow-2xl flex flex-col md:flex-row border border-neutral-200 max-h-[92vh]">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6 select-none animate-fade-in">
+      <div className="bg-white rounded-2xl max-w-5xl w-full overflow-hidden shadow-2xl flex flex-col md:flex-row border border-neutral-200 max-h-[94vh] md:max-h-[88vh]">
         {/* ================= LEFT SIDE: DESIGN UPLOAD, RESIZE & LIVE MOCKUP ================= */}
-        <div className="md:w-1/2 bg-gradient-to-br from-neutral-100 to-neutral-200 p-6 sm:p-8 flex flex-col justify-between relative overflow-y-auto">
+        <div className="md:w-1/2 bg-gradient-to-br from-neutral-100 to-neutral-200 p-3 sm:p-6 md:p-8 flex flex-col justify-between relative overflow-y-auto shrink-0 max-h-[42vh] md:max-h-full">
           {/* Studio Watermark & Header */}
-          <div className="flex items-center justify-between z-10 mb-4">
-            <div className="flex items-center space-x-2 bg-neutral-900 text-white px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+          <div className="flex items-center justify-between z-10 mb-2 sm:mb-4">
+            <div className="flex items-center space-x-1.5 sm:space-x-2 bg-neutral-900 text-white px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold shadow-sm">
+              <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400" />
               <span>LIVE PRINT PREVIEW</span>
             </div>
             <div className="text-right">
-              <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
+              <span className="text-[10px] sm:text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
                 {selectedColor.name} • {selectedSize}
               </span>
             </div>
           </div>
 
           {/* Central Realistic T-Shirt Mockup */}
-          <div className="w-full aspect-square max-w-[280px] sm:max-w-[320px] mx-auto relative flex items-center justify-center py-2">
+          <div className="w-full aspect-square max-w-[170px] sm:max-w-[240px] md:max-w-[300px] mx-auto relative flex items-center justify-center py-1 sm:py-2">
             <TShirtMockup
               shirtColor={selectedColor.hex}
               graphicUrl={uploadedImage || undefined}
@@ -216,19 +216,19 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
           </div>
 
           {/* Upload Controls & Resize Slider */}
-          <div className="mt-4 space-y-4 bg-white/90 backdrop-blur-sm border border-neutral-300/80 rounded-2xl p-4 sm:p-5 shadow-sm">
+          <div className="mt-2 sm:mt-4 space-y-2.5 sm:space-y-4 bg-white/95 backdrop-blur-sm border border-neutral-300/80 rounded-xl sm:rounded-2xl p-3 sm:p-5 shadow-sm">
             {/* File Upload Zone */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-neutral-900 flex items-center space-x-1.5">
-                  <Upload className="w-3.5 h-3.5 text-amber-600" />
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-neutral-900 flex items-center space-x-1 sm:space-x-1.5">
+                  <Upload className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600" />
                   <span>Upload Design From Drive</span>
                 </label>
                 {!uploadedImage && (
                   <button
                     type="button"
                     onClick={handleUseSampleGraphic}
-                    className="text-[11px] text-amber-700 hover:text-amber-800 font-semibold underline"
+                    className="text-[10px] sm:text-[11px] text-amber-700 hover:text-amber-800 font-semibold underline"
                   >
                     Use Sample Artwork
                   </button>
@@ -250,35 +250,35 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={handleDrop}
                   onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-neutral-300 hover:border-amber-500 bg-neutral-50 hover:bg-amber-50/40 rounded-xl p-4 text-center cursor-pointer transition flex flex-col items-center justify-center space-y-1.5"
+                  className="border-2 border-dashed border-neutral-300 hover:border-amber-500 bg-neutral-50 hover:bg-amber-50/40 rounded-xl p-2.5 sm:p-4 text-center cursor-pointer transition flex flex-col items-center justify-center space-y-1"
                 >
-                  <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
-                    <Upload className="w-4 h-4" />
+                  <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
+                    <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </div>
-                  <p className="text-xs font-bold text-neutral-800">
-                    Click to browse or drag & drop artwork file from your file drive
+                  <p className="text-[11px] sm:text-xs font-bold text-neutral-800">
+                    Click to browse or drop artwork file
                   </p>
-                  <p className="text-[10px] text-neutral-500">
-                    Supports PNG, JPG, SVG, WebP (Transparent PNG recommended)
+                  <p className="text-[9px] sm:text-[10px] text-neutral-500">
+                    Supports PNG, JPG, SVG, WebP (Transparent recommended)
                   </p>
                 </div>
               ) : (
-                <div className="flex items-center justify-between p-2.5 bg-neutral-100 rounded-xl border border-neutral-200">
-                  <div className="flex items-center space-x-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-neutral-900 text-amber-400 flex items-center justify-center flex-shrink-0">
-                      <FileImage className="w-4 h-4" />
+                <div className="flex items-center justify-between p-2 sm:p-2.5 bg-neutral-100 rounded-xl border border-neutral-200">
+                  <div className="flex items-center space-x-2 min-w-0">
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-neutral-900 text-amber-400 flex items-center justify-center flex-shrink-0">
+                      <FileImage className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </div>
                     <div className="truncate text-left">
-                      <p className="text-xs font-bold text-neutral-900 truncate">{fileName}</p>
-                      <p className="text-[10px] text-neutral-500">{fileSizeStr}</p>
+                      <p className="text-[11px] sm:text-xs font-bold text-neutral-900 truncate">{fileName}</p>
+                      <p className="text-[9px] sm:text-[10px] text-neutral-500">{fileSizeStr}</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-1.5">
+                  <div className="flex items-center space-x-1 sm:space-x-1.5">
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="px-2.5 py-1 text-[11px] font-semibold text-neutral-700 bg-white border border-neutral-300 rounded-lg hover:bg-neutral-50 transition"
+                      className="px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-[11px] font-semibold text-neutral-700 bg-white border border-neutral-300 rounded-lg hover:bg-neutral-50 transition"
                     >
                       Change
                     </button>
@@ -288,7 +288,7 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
                       className="p-1 text-neutral-400 hover:text-rose-600 transition"
                       title="Remove uploaded graphic"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </button>
                   </div>
                 </div>
@@ -296,14 +296,14 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
             </div>
 
             {/* Resize Design Slider & Print Size Tier */}
-            <div className="pt-2 border-t border-neutral-200/80">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-bold uppercase tracking-wider text-neutral-900 flex items-center space-x-1.5">
-                  <Sliders className="w-3.5 h-3.5 text-amber-600" />
+            <div className="pt-1.5 sm:pt-2 border-t border-neutral-200/80">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-neutral-900 flex items-center space-x-1 sm:space-x-1.5">
+                  <Sliders className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600" />
                   <span>Resize Print Scale:</span>
                 </span>
-                <span className="text-xs font-bold text-amber-700">
-                  {printSizeTier} (+{settings.currencySymbol}{printSurcharge.toFixed(2)})
+                <span className="text-[10px] sm:text-xs font-bold text-amber-700">
+                  {printSizeTier} (+{settings.currencySymbol || '₹'}{printSurcharge.toFixed(2)})
                 </span>
               </div>
 
@@ -315,43 +315,43 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
                 step="0.05"
                 value={printScale}
                 onChange={(e) => setPrintScale(parseFloat(e.target.value))}
-                className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                className="w-full h-1.5 sm:h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
               />
 
               {/* Presets */}
-              <div className="flex items-center justify-between pt-2">
+              <div className="flex items-center justify-between pt-1.5">
                 <button
                   type="button"
                   onClick={() => setPrintScale(0.35)}
-                  className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition ${
+                  className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition ${
                     printScale <= 0.4
                       ? 'bg-neutral-900 text-white'
                       : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
                   }`}
                 >
-                  Pocket (+{settings.currencySymbol}150)
+                  Pocket (+{settings.currencySymbol || '₹'}150)
                 </button>
                 <button
                   type="button"
                   onClick={() => setPrintScale(0.65)}
-                  className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition ${
+                  className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition ${
                     printScale > 0.4 && printScale < 0.8
                       ? 'bg-neutral-900 text-white'
                       : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
                   }`}
                 >
-                  Standard (+{settings.currencySymbol}299)
+                  Standard (+{settings.currencySymbol || '₹'}299)
                 </button>
                 <button
                   type="button"
                   onClick={() => setPrintScale(0.95)}
-                  className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition ${
+                  className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition ${
                     printScale >= 0.8
                       ? 'bg-neutral-900 text-white'
                       : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
                   }`}
                 >
-                  Oversized (+{settings.currencySymbol}450)
+                  Oversized (+{settings.currencySymbol || '₹'}450)
                 </button>
               </div>
             </div>
@@ -361,19 +361,19 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
         {/* ================= RIGHT SIDE: COLORS, SIZES, CONTACT & SAVE TO OWNER ================= */}
         <div className="md:w-1/2 flex flex-col bg-white overflow-y-auto">
           {/* Header */}
-          <div className="p-6 border-b border-neutral-200 flex items-center justify-between sticky top-0 bg-white z-10">
+          <div className="p-3.5 sm:p-5 md:p-6 border-b border-neutral-200 flex items-center justify-between sticky top-0 bg-white z-10">
             <div>
-              <div className="flex items-center space-x-2 text-amber-600 font-bold text-xs uppercase tracking-widest">
-                <Sparkles className="w-3.5 h-3.5" />
+              <div className="flex items-center space-x-1.5 text-amber-600 font-bold text-[10px] sm:text-xs uppercase tracking-widest">
+                <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                 <span>On-Demand Manufacturing</span>
               </div>
-              <h2 className="font-['Oswald'] font-bold text-2xl tracking-wide uppercase text-neutral-900 mt-0.5">
+              <h2 className="font-['Oswald'] font-bold text-xl sm:text-2xl tracking-wide uppercase text-neutral-900 mt-0.5">
                 CUSTOM POD STUDIO
               </h2>
             </div>
             <button
               onClick={onClose}
-              className="p-2 rounded-xl text-neutral-400 hover:text-neutral-800 hover:bg-neutral-100 transition"
+              className="p-1.5 sm:p-2 rounded-xl text-neutral-400 hover:text-neutral-800 hover:bg-neutral-100 transition"
               aria-label="Close studio"
             >
               <X className="w-5 h-5" />
@@ -382,19 +382,19 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
 
           {/* If Submitted: Show Confirmation Screen */}
           {isSubmitted ? (
-            <div className="p-8 flex-1 flex flex-col items-center justify-center text-center space-y-4">
-              <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                <CheckCircle2 className="w-10 h-10" />
+            <div className="p-6 sm:p-8 flex-1 flex flex-col items-center justify-center text-center space-y-3 sm:space-y-4">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                <CheckCircle2 className="w-8 h-8 sm:w-10 sm:h-10" />
               </div>
-              <h3 className="font-['Oswald'] font-bold text-2xl text-neutral-900 uppercase">
+              <h3 className="font-['Oswald'] font-bold text-xl sm:text-2xl text-neutral-900 uppercase">
                 DESIGN SENT TO STORE OWNER!
               </h3>
               <p className="text-xs text-neutral-600 max-w-sm leading-relaxed">
-                Thank you, <strong>{customerName}</strong>! Your custom graphic t-shirt design specification has been successfully dispatched to the website owner.
+                Thank you, <strong>{customerName}</strong>! Your custom graphic t-shirt design specification has been successfully dispatched to ANFA PRINT WEAR.
               </p>
 
               {/* Order Spec Card */}
-              <div className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-4 text-xs space-y-2 text-left">
+              <div className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3.5 sm:p-4 text-xs space-y-2 text-left">
                 <div className="flex justify-between border-b border-neutral-200 pb-2">
                   <span className="text-neutral-500">Submission Reference:</span>
                   <span className="font-mono font-bold text-amber-700">{submissionRef}</span>
@@ -420,7 +420,7 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
                 <div className="flex justify-between border-t border-neutral-200 pt-2 font-bold">
                   <span className="text-neutral-900">Estimated Quote Price:</span>
                   <span className="text-amber-700 font-['Oswald'] text-base">
-                    {settings.currencySymbol}
+                    {settings.currencySymbol || '₹'}
                     {totalPrice.toFixed(2)}
                   </span>
                 </div>
@@ -432,20 +432,20 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
               <div className="bg-amber-50 border border-amber-200 text-amber-900 text-xs p-3 rounded-xl flex items-start space-x-2 text-left">
                 <Info className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                 <span>
-                  Our DTG production specialist in Kolkata will inspect your uploaded artwork file resolution and contact you within 12 hours with the digital proof.
+                  Our DTG production specialist at ANFA PRINT WEAR in Bhainsa will inspect your uploaded artwork file resolution and contact you within 12 hours with the digital proof.
                 </span>
               </div>
 
               <div className="flex space-x-3 pt-2 w-full">
                 <button
                   onClick={handleReset}
-                  className="flex-1 py-3 px-4 rounded-xl border border-neutral-300 font-bold text-xs uppercase tracking-wider text-neutral-800 hover:bg-neutral-50 transition"
+                  className="flex-1 py-2.5 sm:py-3 px-3 sm:px-4 rounded-xl border border-neutral-300 font-bold text-xs uppercase tracking-wider text-neutral-800 hover:bg-neutral-50 transition"
                 >
                   Create Another Design
                 </button>
                 <button
                   onClick={onClose}
-                  className="flex-1 py-3 px-4 rounded-xl bg-neutral-900 hover:bg-black font-bold text-xs uppercase tracking-wider text-white transition"
+                  className="flex-1 py-2.5 sm:py-3 px-3 sm:px-4 rounded-xl bg-neutral-900 hover:bg-black font-bold text-xs uppercase tracking-wider text-white transition"
                 >
                   Done
                 </button>
@@ -453,34 +453,34 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
             </div>
           ) : (
             <form onSubmit={handleSaveAndSendToOwner} className="flex-1 flex flex-col justify-between">
-              <div className="p-6 space-y-6 flex-1 overflow-y-auto">
+              <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 flex-1 overflow-y-auto">
                 {/* 1. Garment Color Selection */}
                 <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-neutral-700 block mb-2.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-neutral-700 block mb-2">
                     1. Select Garment Color:{' '}
                     <span className="text-neutral-900 font-bold">{selectedColor.name}</span>
                   </label>
-                  <div className="grid grid-cols-4 gap-2.5">
+                  <div className="grid grid-cols-4 gap-2">
                     {AVAILABLE_COLORS.map((c) => (
                       <button
                         type="button"
                         key={c.hex}
                         onClick={() => setSelectedColor(c)}
-                        className={`group relative flex flex-col items-center p-2 rounded-xl border transition ${
+                        className={`group relative flex flex-col items-center p-1.5 sm:p-2 rounded-xl border transition ${
                           selectedColor.hex === c.hex
                             ? 'border-neutral-900 bg-neutral-50 ring-2 ring-neutral-900/10'
                             : 'border-neutral-200 hover:border-neutral-400'
                         }`}
                       >
                         <div
-                          className="w-7 h-7 rounded-full border border-neutral-300 shadow-inner flex items-center justify-center"
+                          className="w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-neutral-300 shadow-inner flex items-center justify-center"
                           style={{ backgroundColor: c.hex }}
                         >
                           {selectedColor.hex === c.hex && (
-                            <Check className={`w-4 h-4 ${c.isLight ? 'text-black' : 'text-white'}`} />
+                            <Check className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${c.isLight ? 'text-black' : 'text-white'}`} />
                           )}
                         </div>
-                        <span className="text-[10px] text-neutral-600 mt-1 font-medium truncate w-full text-center">
+                        <span className="text-[9px] sm:text-[10px] text-neutral-600 mt-1 font-medium truncate w-full text-center">
                           {c.name.split(' ')[0]}
                         </span>
                       </button>
@@ -490,16 +490,16 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
 
                 {/* 2. Sizing Selector */}
                 <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-neutral-700 block mb-2.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-neutral-700 block mb-2">
                     2. Select Garment Size:
                   </label>
-                  <div className="grid grid-cols-5 gap-2">
+                  <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
                     {SIZES.map((sz) => (
                       <button
                         type="button"
                         key={sz}
                         onClick={() => setSelectedSize(sz)}
-                        className={`py-3 text-xs font-bold rounded-xl border transition ${
+                        className={`py-2 sm:py-2.5 text-xs font-bold rounded-xl border transition ${
                           selectedSize === sz
                             ? 'border-neutral-900 bg-neutral-900 text-white shadow-sm'
                             : 'border-neutral-200 hover:border-neutral-400 text-neutral-800'
@@ -512,55 +512,55 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
                 </div>
 
                 {/* 3. Customer Contact Info (Sent to owner) */}
-                <div className="pt-2 border-t border-neutral-100 space-y-3">
+                <div className="pt-2 border-t border-neutral-100 space-y-2.5 sm:space-y-3">
                   <label className="text-xs font-bold uppercase tracking-wider text-neutral-700 block">
                     3. Your Contact Details (Sent to Store Owner):
                   </label>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div className="relative">
-                      <User className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-3.5" />
+                      <User className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-3" />
                       <input
                         type="text"
                         placeholder="Your Full Name *"
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
-                        className="w-full text-xs border border-neutral-300 rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:border-neutral-900"
+                        className="w-full text-xs border border-neutral-300 rounded-xl pl-9 pr-3 py-2 sm:py-2.5 focus:outline-none focus:border-neutral-900"
                         required
                       />
                     </div>
                     <div className="relative">
-                      <Mail className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-3.5" />
+                      <Mail className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-3" />
                       <input
                         type="email"
                         placeholder="Your Email Address *"
                         value={customerEmail}
                         onChange={(e) => setCustomerEmail(e.target.value)}
-                        className="w-full text-xs border border-neutral-300 rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:border-neutral-900"
+                        className="w-full text-xs border border-neutral-300 rounded-xl pl-9 pr-3 py-2 sm:py-2.5 focus:outline-none focus:border-neutral-900"
                         required
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div className="relative">
-                      <Phone className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-3.5" />
+                      <Phone className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-3" />
                       <input
                         type="tel"
                         placeholder="Phone (Optional)"
                         value={customerPhone}
                         onChange={(e) => setCustomerPhone(e.target.value)}
-                        className="w-full text-xs border border-neutral-300 rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:border-neutral-900"
+                        className="w-full text-xs border border-neutral-300 rounded-xl pl-9 pr-3 py-2 sm:py-2.5 focus:outline-none focus:border-neutral-900"
                       />
                     </div>
                     <div className="relative">
-                      <MessageSquare className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-3.5" />
+                      <MessageSquare className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-3" />
                       <input
                         type="text"
                         placeholder="Print placement notes (Optional)"
                         value={orderNotes}
                         onChange={(e) => setOrderNotes(e.target.value)}
-                        className="w-full text-xs border border-neutral-300 rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:border-neutral-900"
+                        className="w-full text-xs border border-neutral-300 rounded-xl pl-9 pr-3 py-2 sm:py-2.5 focus:outline-none focus:border-neutral-900"
                       />
                     </div>
                   </div>
@@ -568,7 +568,7 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
 
                 {/* Error Banner */}
                 {formError && (
-                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center space-x-2">
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center space-x-2">
                     <Info className="w-4 h-4 flex-shrink-0" />
                     <span>{formError}</span>
                   </div>
@@ -576,19 +576,19 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
               </div>
 
               {/* ================= RIGHT BOTTOM CORNER: SAVE & SEND TO OWNER ================= */}
-              <div className="p-6 border-t border-neutral-200 bg-neutral-50 sticky bottom-0 z-10">
-                <div className="flex items-center justify-between mb-3">
+              <div className="p-3.5 sm:p-5 md:p-6 border-t border-neutral-200 bg-neutral-50 sticky bottom-0 z-10">
+                <div className="flex items-center justify-between mb-2 sm:mb-3">
                   <div>
-                    <span className="text-[10px] text-neutral-500 uppercase font-bold tracking-wider">
-                      Price Calculation (Increases with Print Size):
+                    <span className="text-[9px] sm:text-[10px] text-neutral-500 uppercase font-bold tracking-wider">
+                      Price (Based on Print Scale):
                     </span>
                     <div className="flex items-baseline space-x-2">
-                      <span className="text-2xl font-bold font-['Oswald'] text-neutral-900">
-                        {settings.currencySymbol}
+                      <span className="text-xl sm:text-2xl font-bold font-['Oswald'] text-neutral-900">
+                        {settings.currencySymbol || '₹'}
                         {totalPrice.toFixed(2)}
                       </span>
-                      <span className="text-[11px] text-amber-700 font-semibold">
-                        ({settings.currencySymbol}{baseGarmentPrice.toFixed(2)} base + {settings.currencySymbol}{printSurcharge.toFixed(2)} print)
+                      <span className="text-[10px] sm:text-[11px] text-amber-700 font-semibold">
+                        ({settings.currencySymbol || '₹'}{baseGarmentPrice.toFixed(2)} + {settings.currencySymbol || '₹'}{printSurcharge.toFixed(2)})
                       </span>
                     </div>
                   </div>
@@ -599,13 +599,13 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
                   type="submit"
                   id="pod-save-and-send-owner-btn"
                   disabled={isSubmitting}
-                  className="w-full py-4 bg-amber-400 hover:bg-amber-500 text-black font-['Oswald'] font-bold text-sm tracking-wider uppercase rounded-xl flex items-center justify-center space-x-2 transition shadow-lg active:scale-95 disabled:opacity-50"
+                  className="w-full py-3 sm:py-3.5 bg-amber-400 hover:bg-amber-500 text-black font-['Oswald'] font-bold text-xs sm:text-sm tracking-wider uppercase rounded-xl flex items-center justify-center space-x-2 transition shadow-md active:scale-95 disabled:opacity-50"
                 >
                   {isSubmitting ? (
                     <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <>
-                      <Send className="w-4 h-4" />
+                      <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       <span>SAVE & SEND DESIGN TO OWNER</span>
                     </>
                   )}

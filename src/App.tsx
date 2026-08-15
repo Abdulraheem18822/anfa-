@@ -350,7 +350,43 @@ export default function App() {
   };
 
   const handleSelectCategoryAndScroll = (category: string) => {
+    setSearchQuery('');
     setActiveCategory(category);
+    const gridEl = document.getElementById('products-section');
+    if (gridEl) {
+      gridEl.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const handleSearch = (query: string) => {
+    const q = query.toLowerCase().trim();
+    setSearchQuery(q);
+
+    // Map search terms to specific categories if matching
+    if (q.includes('winter') || q.includes('snow') || q.includes('frost')) {
+      setActiveCategory('winter-special');
+    } else if (q.includes('summer') || q.includes('sun') || q.includes('tropical')) {
+      setActiveCategory('summer-special');
+    } else if (q.includes('travel') || q.includes('trip') || q.includes('wander') || q.includes('nomad')) {
+      setActiveCategory('traveling');
+    } else if (q.includes('dog') || q.includes('pet') || q.includes('puppy') || q.includes('paw')) {
+      setActiveCategory('dog-lovers');
+    } else if (q.includes('val') || q.includes('love') || q.includes('heart') || q.includes('romance') || q.includes('glow')) {
+      setActiveCategory('valentines');
+    } else if (q.includes('women') || q.includes('girl') || q.includes('female')) {
+      setActiveCategory('women');
+    } else if (q.includes('men') || q.includes('boy') || q.includes('male')) {
+      setActiveCategory('men');
+    } else if (q.includes('new') || q.includes('arrival')) {
+      setActiveCategory('new-arrival');
+    } else if (q.includes('best') || q.includes('seller') || q.includes('top')) {
+      setActiveCategory('best-seller');
+    } else if (q.includes('feat') || q.includes('future')) {
+      setActiveCategory('featured');
+    } else {
+      setActiveCategory('all');
+    }
+
     const gridEl = document.getElementById('products-section');
     if (gridEl) {
       gridEl.scrollIntoView({ behavior: 'smooth' });
@@ -381,7 +417,7 @@ export default function App() {
         onOpenProfile={() => setIsProfileOpen(true)}
         onOpenCareTab={handleOpenCareTab}
         onSelectCategory={handleSelectCategoryAndScroll}
-        onSearch={(q) => setSearchQuery(q)}
+        onSearch={handleSearch}
         products={MOCK_PRODUCTS}
         onSelectProduct={(p) => setQuickViewProduct(p)}
       />
@@ -395,6 +431,7 @@ export default function App() {
           onAddToCart={(product, size) => handleAddToCart(product, undefined, undefined, size, 1)}
           onExploreCategory={handleSelectCategoryAndScroll}
           onExploreCollection={handleSelectCategoryAndScroll}
+          onSearchSubmit={handleSearch}
         />
 
         {/* Partner Brands Grid / Below-Banner Clickable Category Menu */}

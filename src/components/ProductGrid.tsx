@@ -149,6 +149,32 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
               );
             })}
           </div>
+
+          {/* Active Collection / Search Query Badge Filter Indicator */}
+          {(currentCategory === 'winter-special' ||
+            currentCategory === 'summer-special' ||
+            currentCategory === 'traveling' ||
+            currentCategory === 'dog-lovers' ||
+            currentCategory === 'valentines' ||
+            searchQuery.trim() !== '') && (
+            <div className="mt-4 inline-flex items-center space-x-2 bg-amber-50 border border-amber-200 text-amber-900 px-3.5 py-1.5 rounded-full text-xs font-semibold animate-fade-in">
+              <span>
+                Filtered by:{' '}
+                <strong className="uppercase">
+                  {searchQuery.trim()
+                    ? `Search "${searchQuery}"`
+                    : currentCategory.replace('-', ' ')}
+                </strong>{' '}
+                ({filteredProducts.length} items found)
+              </span>
+              <button
+                onClick={() => onSelectCategory('all')}
+                className="ml-1 text-[11px] font-bold text-neutral-600 hover:text-black underline"
+              >
+                Reset Filter
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 2-Column Mobile / 4-Column Desktop Product Grid */}

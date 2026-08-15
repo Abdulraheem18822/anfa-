@@ -190,14 +190,14 @@ export const Footer: React.FC<FooterProps> = ({
           </div>
         </div>
 
-        {/* Bottom Bar: Copyright */}
+        {/* Bottom Bar: Copyright (Address removed from last line as requested) */}
         <div className="pt-8 border-t border-neutral-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-neutral-500">
           <p>
-            Copyright © {settings.copyrightYear || 2026} {settings.storeName || 'Anfa Print Wear'}. All rights reserved.
+            Copyright © {settings.copyrightYear || 2026} {settings.storeName || 'ANFA PRINT WEAR'}. All rights reserved.
           </p>
 
-          <p className="text-[11px] text-neutral-400">
-            Nilofar complex, main road, cloth market, Bhainsa, Telangana, 504103, India.
+          <p className="text-[11px] text-neutral-500">
+            Premium Direct-to-Garment (DTG) Custom Apparel & On-Demand Printing
           </p>
         </div>
       </div>
