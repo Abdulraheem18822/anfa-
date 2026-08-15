@@ -10,6 +10,8 @@ interface TShirtMockupProps {
   className?: string;
   showShadow?: boolean;
   scale?: number;
+  customText?: string;
+  customFont?: string;
   glowActive?: boolean;
 }
 
@@ -22,13 +24,28 @@ export const TShirtMockup: React.FC<TShirtMockupProps> = ({
   isGlowInDark = false,
   className = 'w-full h-full',
   showShadow = true,
+  scale = 1,
+  customText,
+  customFont,
 }) => {
-  // SVG Graphic Renderer based on graphicType
+  // SVG Graphic Renderer based on graphicType or uploaded graphicUrl
   const renderGraphicContent = () => {
     if (graphicUrl) {
       return (
-        <div className="flex items-center justify-center w-28 h-28 md:w-36 md:h-36 overflow-hidden">
-          <img src={graphicUrl} alt="Custom Graphic" className="max-w-full max-h-full object-contain filter drop-shadow" />
+        <div
+          className="flex items-center justify-center transition-all duration-300"
+          style={{
+            width: `${Math.round(180 * scale)}px`,
+            height: `${Math.round(180 * scale)}px`,
+            maxWidth: '100%',
+            maxHeight: '100%',
+          }}
+        >
+          <img
+            src={graphicUrl}
+            alt="Custom Uploaded Artwork"
+            className="max-w-full max-h-full object-contain filter drop-shadow-md"
+          />
         </div>
       );
     }

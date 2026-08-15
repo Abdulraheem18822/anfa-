@@ -69,6 +69,17 @@ export interface WishlistItem {
   dateAdded: string;
 }
 
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  country?: string;
+}
+
 export interface StoreSettings {
   storeName: string;
   tagline: string;
@@ -82,6 +93,8 @@ export interface StoreSettings {
   copyrightYear: number;
   announcementText: string;
   socialHandle?: string;
+  facebookUrl?: string;
+  instagramUrl?: string;
 }
 
 export interface InstagramPost {

@@ -1,12 +1,15 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Sparkles, ArrowRight, Check, SlidersHorizontal, ShoppingBag } from 'lucide-react';
+import { Sparkles, ArrowRight, Check } from 'lucide-react';
 import {
   MOCK_PRODUCTS,
   MOCK_PROMOS,
   MOCK_INSTAGRAM_POSTS,
   DEFAULT_STORE_SETTINGS,
+  DEFAULT_USERS,
+  INITIAL_USER_CARTS,
+  INITIAL_USER_WISHLISTS,
 } from './data/mockData';
-import { Product, CartItem, StoreSettings } from './types/store';
+import { Product, CartItem, StoreSettings, UserProfile } from './types/store';
 
 // Components
 import { Navbar } from './components/Navbar';
@@ -21,58 +24,85 @@ import { QuickViewModal } from './components/QuickViewModal';
 import { CartDrawer } from './components/CartDrawer';
 import { WishlistDrawer } from './components/WishlistDrawer';
 import { PODStudioModal } from './components/PODStudioModal';
-import { StoreSettingsModal } from './components/StoreSettingsModal';
+import { CustomerCareModal, CustomerCareTab } from './components/CustomerCareModal';
+import { UserProfileModal } from './components/UserProfileModal';
 import { TShirtMockup } from './components/TShirtMockup';
 
 export default function App() {
-  // Store settings state with localStorage persistence
+  // Store settings state for Anfa Print Wear (INR currency)
   const [settings, setSettings] = useState<StoreSettings>(() => {
     try {
-      const saved = localStorage.getItem('oritina_store_settings');
-      if (saved) return JSON.parse(saved);
+      const saved = localStorage.getItem('anfa_store_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.storeName && parsed.storeName !== 'ORITINA') {
+          return parsed;
+        }
+      }
     } catch {
       // ignore
     }
     return DEFAULT_STORE_SETTINGS;
   });
 
-  // Cart & Wishlist state with localStorage persistence
-  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
+  // User Accounts & Authentication / Profile state
+  const [allUsers, setAllUsers] = useState<UserProfile[]>(() => {
     try {
-      const saved = localStorage.getItem('oritina_cart_items');
+      const saved = localStorage.getItem('anfa_all_users');
       if (saved) return JSON.parse(saved);
     } catch {
       // ignore
     }
-    return [
-      {
-        id: 'cart-init-1',
-        productId: 'prod-1',
-        name: 'Cyberpunk Neo Tokyo Graphic Tee',
-        price: 38.0,
-        size: 'L',
-        shirtColor: '#121212',
-        shirtColorName: 'Pitch Black',
-        graphicType: 'graphic-tokyo',
-        quantity: 1,
-      },
-    ];
+    return DEFAULT_USERS;
   });
 
-  const [wishlistProductIds, setWishlistProductIds] = useState<string[]>(() => {
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     try {
-      const saved = localStorage.getItem('oritina_wishlist_ids');
+      const saved = localStorage.getItem('anfa_current_user');
       if (saved) return JSON.parse(saved);
     } catch {
       // ignore
     }
-    return ['prod-2', 'prod-4'];
+    return null;
   });
+
+  // User-isolated Carts map { [userId: string]: CartItem[] }
+  const [userCarts, setUserCarts] = useState<Record<string, CartItem[]>>(() => {
+    try {
+      const saved = localStorage.getItem('anfa_user_carts');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+    return INITIAL_USER_CARTS;
+  });
+
+  // User-isolated Wishlists map { [userId: string]: string[] }
+  const [userWishlists, setUserWishlists] = useState<Record<string, string[]>>(() => {
+    try {
+      const saved = localStorage.getItem('anfa_user_wishlists');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+    return INITIAL_USER_WISHLISTS;
+  });
+
+  const activeUserKey = currentUser?.id || 'guest_session';
+
+  // Derive active user's cart and wishlist
+  const currentCartItems = useMemo(() => {
+    return userCarts[activeUserKey] || [];
+  }, [userCarts, activeUserKey]);
+
+  const currentWishlistIds = useMemo(() => {
+    return userWishlists[activeUserKey] || [];
+  }, [userWishlists, activeUserKey]);
 
   // Persist state changes
   useEffect(() => {
     try {
-      localStorage.setItem('oritina_store_settings', JSON.stringify(settings));
+      localStorage.setItem('anfa_store_settings', JSON.stringify(settings));
     } catch {
       // ignore
     }
@@ -80,19 +110,39 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('oritina_cart_items', JSON.stringify(cartItems));
+      localStorage.setItem('anfa_all_users', JSON.stringify(allUsers));
     } catch {
       // ignore
     }
-  }, [cartItems]);
+  }, [allUsers]);
 
   useEffect(() => {
     try {
-      localStorage.setItem('oritina_wishlist_ids', JSON.stringify(wishlistProductIds));
+      if (currentUser) {
+        localStorage.setItem('anfa_current_user', JSON.stringify(currentUser));
+      } else {
+        localStorage.removeItem('anfa_current_user');
+      }
     } catch {
       // ignore
     }
-  }, [wishlistProductIds]);
+  }, [currentUser]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('anfa_user_carts', JSON.stringify(userCarts));
+    } catch {
+      // ignore
+    }
+  }, [userCarts]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('anfa_user_wishlists', JSON.stringify(userWishlists));
+    } catch {
+      // ignore
+    }
+  }, [userWishlists]);
 
   // UI Navigation & Modals state
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -100,8 +150,12 @@ export default function App() {
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [isWishlistOpen, setIsWishlistOpen] = useState<boolean>(false);
   const [isPODStudioOpen, setIsPODStudioOpen] = useState<boolean>(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+
+  // Customer Care & Contact Modal State
+  const [isCareModalOpen, setIsCareModalOpen] = useState<boolean>(false);
+  const [careModalTab, setCareModalTab] = useState<CustomerCareTab>('help');
 
   // Toast Notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -113,7 +167,53 @@ export default function App() {
     }, 3000);
   };
 
-  // Generic Cart Add Function supporting both item object and individual product args
+  const handleOpenCareTab = (tab: CustomerCareTab) => {
+    setCareModalTab(tab);
+    setIsCareModalOpen(true);
+  };
+
+  // Switch User Profile
+  const handleSwitchUser = (user: UserProfile) => {
+    setCurrentUser(user);
+    showToast(`Switched account to ${user.name}`);
+  };
+
+  // Logout User Profile
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('anfa_current_user');
+    showToast('Logged out successfully');
+  };
+
+  // Update Existing Profile
+  const handleUpdateProfile = (updatedUser: UserProfile) => {
+    setCurrentUser(updatedUser);
+    setAllUsers((prev) =>
+      prev.map((u) => (u.id === updatedUser.id ? updatedUser : u))
+    );
+    showToast('Customer profile updated successfully');
+  };
+
+  // Add New User Profile / Login
+  const handleAddNewUser = (newUser: UserProfile) => {
+    setAllUsers((prev) => {
+      const exists = prev.some((u) => u.id === newUser.id || u.email === newUser.email);
+      if (exists) {
+        return prev.map((u) => (u.id === newUser.id || u.email === newUser.email ? newUser : u));
+      }
+      return [...prev, newUser];
+    });
+    setCurrentUser(newUser);
+    if (!userCarts[newUser.id]) {
+      setUserCarts((prev) => ({ ...prev, [newUser.id]: [] }));
+    }
+    if (!userWishlists[newUser.id]) {
+      setUserWishlists((prev) => ({ ...prev, [newUser.id]: [] }));
+    }
+    showToast(`Logged in as ${newUser.name}`);
+  };
+
+  // Generic Cart Add Function (Isolated per current user)
   const handleAddToCart = (
     itemOrProduct: Omit<CartItem, 'id'> | Product,
     selectedColorHex?: string,
@@ -141,8 +241,9 @@ export default function App() {
       };
     }
 
-    setCartItems((prev) => {
-      const existingIndex = prev.findIndex(
+    setUserCarts((prev) => {
+      const userCart = prev[activeUserKey] || [];
+      const existingIndex = userCart.findIndex(
         (ci) =>
           ci.productId === cartItemPayload.productId &&
           ci.size === cartItemPayload.size &&
@@ -150,26 +251,32 @@ export default function App() {
           ci.customText === cartItemPayload.customText
       );
 
+      let updatedCart: CartItem[];
       if (existingIndex > -1) {
-        const updated = [...prev];
-        updated[existingIndex].quantity += cartItemPayload.quantity;
-        return updated;
+        updatedCart = [...userCart];
+        updatedCart[existingIndex].quantity += cartItemPayload.quantity;
       } else {
         const newItem: CartItem = {
           ...cartItemPayload,
           id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         };
-        return [...prev, newItem];
+        updatedCart = [...userCart, newItem];
       }
+
+      return {
+        ...prev,
+        [activeUserKey]: updatedCart,
+      };
     });
 
-    showToast(`Added "${cartItemPayload.name}" to your cart`);
+    showToast(`Added "${cartItemPayload.name}" to cart`);
     setIsCartOpen(true);
   };
 
   const handleUpdateQuantity = (id: string, delta: number) => {
-    setCartItems((prev) =>
-      prev
+    setUserCarts((prev) => {
+      const userCart = prev[activeUserKey] || [];
+      const updated = userCart
         .map((item) => {
           if (item.id === id) {
             const newQty = item.quantity + delta;
@@ -177,40 +284,62 @@ export default function App() {
           }
           return item;
         })
-        .filter((item): item is CartItem => item !== null)
-    );
+        .filter((item): item is CartItem => item !== null);
+
+      return {
+        ...prev,
+        [activeUserKey]: updated,
+      };
+    });
   };
 
   const handleRemoveCartItem = (id: string) => {
-    setCartItems((prev) => prev.filter((item) => item.id !== id));
+    setUserCarts((prev) => ({
+      ...prev,
+      [activeUserKey]: (prev[activeUserKey] || []).filter((item) => item.id !== id),
+    }));
   };
 
   const handleClearCart = () => {
-    setCartItems([]);
+    setUserCarts((prev) => ({
+      ...prev,
+      [activeUserKey]: [],
+    }));
   };
 
-  // Wishlist Actions
+  // Wishlist Actions (Isolated per current user)
   const handleToggleWishlist = (productIdOrProduct: string | Product) => {
     const id = typeof productIdOrProduct === 'string' ? productIdOrProduct : productIdOrProduct.id;
-    setWishlistProductIds((prev) => {
-      const exists = prev.includes(id);
+    setUserWishlists((prev) => {
+      const userWishlist = prev[activeUserKey] || [];
+      const exists = userWishlist.includes(id);
+      let updated: string[];
+
       if (exists) {
-        showToast('Removed item from your wishlist');
-        return prev.filter((item) => item !== id);
+        showToast('Removed item from saved wishlist');
+        updated = userWishlist.filter((item) => item !== id);
       } else {
-        showToast('Saved item to your wishlist ❤️');
-        return [...prev, id];
+        showToast('Saved item to wishlist ❤️');
+        updated = [...userWishlist, id];
       }
+
+      return {
+        ...prev,
+        [activeUserKey]: updated,
+      };
     });
   };
 
   const wishlistProducts = useMemo(() => {
-    return MOCK_PRODUCTS.filter((p) => wishlistProductIds.includes(p.id));
-  }, [wishlistProductIds]);
+    return MOCK_PRODUCTS.filter((p) => currentWishlistIds.includes(p.id));
+  }, [currentWishlistIds]);
 
   const handleMoveWishlistToCart = (product: Product) => {
     handleAddToCart(product);
-    setWishlistProductIds((prev) => prev.filter((id) => id !== product.id));
+    setUserWishlists((prev) => ({
+      ...prev,
+      [activeUserKey]: (prev[activeUserKey] || []).filter((id) => id !== product.id),
+    }));
   };
 
   const handleOpenProductById = (productId: string) => {
@@ -240,36 +369,17 @@ export default function App() {
         </div>
       )}
 
-      {/* Floating Quick Customizer & Store Settings Bar for Shop Owner */}
-      <div className="fixed bottom-6 left-6 z-30 flex items-center space-x-2">
-        <button
-          onClick={() => setIsSettingsOpen(true)}
-          className="bg-neutral-900/90 hover:bg-black text-amber-400 border border-neutral-700/80 px-3.5 py-2.5 rounded-full shadow-2xl backdrop-blur-sm flex items-center space-x-2 text-xs font-bold transition active:scale-95 group"
-          title="Edit shop name, phone, address, currency, policies"
-        >
-          <SlidersHorizontal className="w-3.5 h-3.5 group-hover:rotate-90 transition-transform" />
-          <span className="hidden sm:inline">Store Settings</span>
-        </button>
-
-        <button
-          onClick={() => setIsPODStudioOpen(true)}
-          className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black px-4 py-2.5 rounded-full shadow-2xl flex items-center space-x-2 text-xs font-bold transition active:scale-95"
-          title="Create custom graphic t-shirt in POD Studio"
-        >
-          <Sparkles className="w-4 h-4" />
-          <span>POD Studio</span>
-        </button>
-      </div>
-
-      {/* Top Header & Sticky Navigation */}
+      {/* Top Header & Sticky Navigation (Keeps POD Studio in Header & User Profile button) */}
       <Navbar
         settings={settings}
-        cartCount={cartItems.reduce((acc, i) => acc + i.quantity, 0)}
-        wishlistCount={wishlistProductIds.length}
+        currentUser={currentUser}
+        cartCount={currentCartItems.reduce((acc, i) => acc + i.quantity, 0)}
+        wishlistCount={currentWishlistIds.length}
         onOpenCart={() => setIsCartOpen(true)}
         onOpenWishlist={() => setIsWishlistOpen(true)}
         onOpenCustomizer={() => setIsPODStudioOpen(true)}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenProfile={() => setIsProfileOpen(true)}
+        onOpenCareTab={handleOpenCareTab}
         onSelectCategory={handleSelectCategoryAndScroll}
         onSearch={(q) => setSearchQuery(q)}
         products={MOCK_PRODUCTS}
@@ -278,24 +388,26 @@ export default function App() {
 
       {/* Main Landing Page Content */}
       <main className="flex-1">
-        {/* Split Carousel Hero Banners (Left Women Turquoise / Right Men Azure) */}
+        {/* Split Carousel Hero Banners (Unforgettable single line & wide search) */}
         <HeroBanners
           settings={settings}
           onQuickView={(product) => setQuickViewProduct(product)}
           onAddToCart={(product, size) => handleAddToCart(product, undefined, undefined, size, 1)}
           onExploreCategory={handleSelectCategoryAndScroll}
           onExploreCollection={handleSelectCategoryAndScroll}
-          onLaunchPODStudio={() => setIsPODStudioOpen(true)}
         />
 
-        {/* Partner Brands Grid */}
-        <PartnerBrands />
+        {/* Partner Brands Grid / Below-Banner Clickable Category Menu */}
+        <PartnerBrands
+          activeCategory={activeCategory}
+          onSelectCategory={handleSelectCategoryAndScroll}
+        />
 
-        {/* 3-Column Editorial Promo Banner Cards with Retro 'New' Starburst */}
+        {/* 3-Column Editorial Promo Banner Cards */}
         <PromoCards
           promos={MOCK_PROMOS}
           onShopCategory={handleSelectCategoryAndScroll}
-          onSelectPromo={(graphicType, category) => {
+          onSelectPromo={(_graphicType, category) => {
             handleSelectCategoryAndScroll(category);
           }}
           onQuickView={(p) => setQuickViewProduct(p)}
@@ -314,17 +426,12 @@ export default function App() {
             onAddToCart={(product, size) => handleAddToCart(product, undefined, undefined, size, 1)}
             onQuickAdd={(product) => handleAddToCart(product)}
             onToggleWishlist={handleToggleWishlist}
-            wishlistProductIds={wishlistProductIds}
-            isWishlisted={(id) => wishlistProductIds.includes(id)}
-            onOpenCustomizer={() => setIsPODStudioOpen(true)}
-            onOpenCustomizerWithProduct={(prod) => {
-              setQuickViewProduct(null);
-              setIsPODStudioOpen(true);
-            }}
+            wishlistProductIds={currentWishlistIds}
+            isWishlisted={(id) => currentWishlistIds.includes(id)}
           />
         </div>
 
-        {/* Interactive Custom POD Studio Callout Banner */}
+        {/* Interactive Custom POD Studio Callout Banner (Kept as requested) */}
         <section className="bg-neutral-900 text-white py-16 px-4 md:px-8 relative overflow-hidden my-8 select-none">
           <div
             className="absolute inset-0 opacity-10 pointer-events-none"
@@ -345,7 +452,7 @@ export default function App() {
                 CREATE YOUR OWN <span className="text-amber-400">SIGNATURE</span> T-SHIRT
               </h2>
               <p className="text-neutral-300 text-sm md:text-base leading-relaxed">
-                Choose from heavyweight 240GSM cotton, select premium vintage washes, pick exclusive artwork templates, or inject your own custom brand typography. Printed using eco-certified Japanese DTG technology.
+                Upload your custom artwork directly from your device or drive, select your favorite garment color and size, customize your print dimensions, and send your design straight to our DTG production team in Kolkata.
               </p>
               <div className="pt-2 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
                 <button
@@ -369,7 +476,7 @@ export default function App() {
                 <TShirtMockup
                   shirtColor="#121212"
                   graphicType="graphic-tokyo"
-                  customText="LIMITED POD DROP"
+                  customText="ANFA APPAREL"
                   customFont="'Oswald', sans-serif"
                   showShadow={true}
                   className="w-full h-full"
@@ -381,7 +488,7 @@ export default function App() {
                   onClick={() => setIsPODStudioOpen(true)}
                   className="text-amber-400 hover:text-amber-300 font-bold flex items-center space-x-1"
                 >
-                  <span>Launch Studio</span>
+                  <span>Open Studio</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -401,14 +508,26 @@ export default function App() {
         <ValueGuarantees settings={settings} />
       </main>
 
-      {/* Global E-commerce Footer */}
+      {/* Global E-commerce Footer (without newsletter, with Kolkata address & customer care) */}
       <Footer
         settings={settings}
         onSelectCategory={handleSelectCategoryAndScroll}
-        onOpenPage={(title) => {
-          showToast(`Opening ${title}`);
-        }}
-        onOpenCustomizer={() => setIsPODStudioOpen(true)}
+        onOpenCareTab={handleOpenCareTab}
+      />
+
+      {/* Customer Profile & User Switcher Modal */}
+      <UserProfileModal
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        currentUser={currentUser}
+        allUsers={allUsers}
+        onSwitchUser={handleSwitchUser}
+        onUpdateProfile={handleUpdateProfile}
+        onAddNewUser={handleAddNewUser}
+        onLogout={handleLogout}
+        cartCount={currentCartItems.reduce((acc, i) => acc + i.quantity, 0)}
+        wishlistCount={currentWishlistIds.length}
+        settings={settings}
       />
 
       {/* Quick View Modal */}
@@ -418,11 +537,7 @@ export default function App() {
         settings={settings}
         onAddToCart={handleAddToCart}
         onToggleWishlist={handleToggleWishlist}
-        isWishlisted={quickViewProduct ? wishlistProductIds.includes(quickViewProduct.id) : false}
-        onOpenCustomizer={(prod) => {
-          setQuickViewProduct(null);
-          setIsPODStudioOpen(true);
-        }}
+        isWishlisted={quickViewProduct ? currentWishlistIds.includes(quickViewProduct.id) : false}
         isOpen={!!quickViewProduct}
       />
 
@@ -430,15 +545,11 @@ export default function App() {
       <CartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
-        cartItems={cartItems}
+        cartItems={currentCartItems}
         settings={settings}
         onUpdateQuantity={handleUpdateQuantity}
         onRemoveItem={handleRemoveCartItem}
         onClearCart={handleClearCart}
-        onOpenCustomizer={() => {
-          setIsCartOpen(false);
-          setIsPODStudioOpen(true);
-        }}
       />
 
       {/* Wishlist Drawer */}
@@ -456,18 +567,14 @@ export default function App() {
         isOpen={isPODStudioOpen}
         onClose={() => setIsPODStudioOpen(false)}
         settings={settings}
-        onAddToCart={handleAddToCart}
       />
 
-      {/* Shop Owner Settings Modal to update shop name, contact, currency & policies */}
-      <StoreSettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
+      {/* Dedicated Customer Care, Policies & Contact Form Modal */}
+      <CustomerCareModal
+        isOpen={isCareModalOpen}
+        onClose={() => setIsCareModalOpen(false)}
+        initialTab={careModalTab}
         settings={settings}
-        onSaveSettings={(newSettings) => {
-          setSettings(newSettings);
-          showToast('Store settings updated successfully!');
-        }}
       />
     </div>
   );

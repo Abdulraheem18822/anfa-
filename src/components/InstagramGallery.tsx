@@ -12,7 +12,7 @@ interface InstagramGalleryProps {
 
 export const InstagramGallery: React.FC<InstagramGalleryProps> = ({
   posts = instagramFeed,
-  storeHandle = '@oritina_apparel',
+  storeHandle = '@anfa_print_wear',
   onSelectProductById,
 }) => {
   const [activeModalPost, setActiveModalPost] = useState<InstagramPost | null>(null);
@@ -33,19 +33,15 @@ export const InstagramGallery: React.FC<InstagramGalleryProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center mb-10 md:mb-14">
-          <div className="flex items-center justify-center space-x-2 text-amber-600 text-xs font-bold uppercase tracking-widest mb-1">
-            <Instagram className="w-4 h-4" />
-            <span>{storeHandle}</span>
-          </div>
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-['Oswald'] font-bold text-neutral-900 tracking-wider uppercase">
             INSTAGRAM
           </h2>
           <p className="text-xs sm:text-sm font-semibold tracking-[0.2em] text-neutral-400 uppercase mt-2">
-            GET INSPIRED BY ORITINA FANS FROM ALL AROUND THE WORLD
+            COMMUNITY LOOKBOOK & STREETWEAR MOMENTS
           </p>
         </div>
 
-        {/* 5-Column Photo Showcase (matching image layout) */}
+        {/* 5-Column Photo Showcase */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
           {posts.map((post) => (
             <div

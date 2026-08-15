@@ -7,12 +7,12 @@ interface ValueGuaranteesProps {
 
 export const ValueGuarantees: React.FC<ValueGuaranteesProps> = ({ settings }) => {
   return (
-    <section id="guarantees-section" className="py-14 md:py-20 bg-white border-t border-neutral-200">
+    <section id="guarantees-section" className="py-14 md:py-20 bg-white border-t border-neutral-200 select-none">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12 text-center">
           {/* 1. Free Delivery */}
           <div className="flex flex-col items-center px-4">
-            {/* Delivery Truck Outline Vector Icon (styled like the image) */}
+            {/* Delivery Truck Outline Vector Icon */}
             <div className="w-14 h-14 mb-4 flex items-center justify-center text-amber-500">
               <svg viewBox="0 0 64 64" className="w-12 h-12 stroke-current fill-none stroke-[1.8]">
                 {/* Truck Cabin & Bed */}
@@ -30,60 +30,57 @@ export const ValueGuarantees: React.FC<ValueGuaranteesProps> = ({ settings }) =>
               </svg>
             </div>
             <h3 className="text-base sm:text-lg font-['Montserrat',sans-serif] font-bold text-neutral-900 tracking-tight">
-              Free Delivery From {settings.currencySymbol} {settings.freeDeliveryThreshold}
+              Free Delivery On All Orders
             </h3>
-            <p className="text-xs text-neutral-500 mt-2.5 leading-relaxed max-w-xs">
-              Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium
+            <p className="text-xs text-neutral-500 mt-2 leading-relaxed max-w-xs">
+              Delivery will be 100% free across India with express door-to-door courier dispatch and real-time tracking.
             </p>
           </div>
 
           {/* 2. Money Back Guarantee */}
           <div className="flex flex-col items-center px-4">
-            {/* Currency / Money Shield Badge Vector Icon */}
+            {/* Currency Shield Badge Vector Icon with INR Rupee Symbol */}
             <div className="w-14 h-14 mb-4 flex items-center justify-center text-amber-500">
               <svg viewBox="0 0 64 64" className="w-12 h-12 stroke-current fill-none stroke-[1.8]">
-                {/* Shield / Ribbon */}
+                {/* Shield */}
                 <path d="M 32 6 L 52 14 L 52 32 C 52 46 32 58 32 58 C 32 58 12 46 12 32 L 12 14 Z" />
-                {/* Dollar / Money Sign */}
                 <circle cx="32" cy="28" r="11" strokeDasharray="2 2" />
                 <text
                   x="32"
                   y="34"
                   textAnchor="middle"
                   fill="currentColor"
-                  fontSize="16"
+                  fontSize="15"
                   fontWeight="700"
                   fontFamily="'Montserrat', sans-serif"
                   stroke="none"
                 >
-                  $
+                  ₹
                 </text>
               </svg>
             </div>
             <h3 className="text-base sm:text-lg font-['Montserrat',sans-serif] font-bold text-neutral-900 tracking-tight">
-              Money Back Guarantee
+              100% Money Back Guarantee
             </h3>
-            <p className="text-xs text-neutral-500 mt-2.5 leading-relaxed max-w-xs">
-              Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium
+            <p className="text-xs text-neutral-500 mt-2 leading-relaxed max-w-xs">
+              30-day hassle-free returns or full refunds if your custom print does not match your exact expectations.
             </p>
           </div>
 
           {/* 3. Authenticity 100% Guaranteed */}
           <div className="flex flex-col items-center px-4">
-            {/* Checkmark Stamp / Guarantee Seal Vector Icon */}
+            {/* Guarantee Seal Vector Icon */}
             <div className="w-14 h-14 mb-4 flex items-center justify-center text-amber-500">
               <svg viewBox="0 0 64 64" className="w-12 h-12 stroke-current fill-none stroke-[1.8]">
-                {/* Scalloped Stamp / Rosette */}
                 <rect x="14" y="14" width="36" height="36" rx="6" />
-                {/* Inner Checkmark */}
                 <path d="M 24 32 L 29 38 L 41 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
             <h3 className="text-base sm:text-lg font-['Montserrat',sans-serif] font-bold text-neutral-900 tracking-tight">
-              Authenticity 100% Guaranteed
+              Handpicked Designer Quality
             </h3>
-            <p className="text-xs text-neutral-500 mt-2.5 leading-relaxed max-w-xs">
-              Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium
+            <p className="text-xs text-neutral-500 mt-2 leading-relaxed max-w-xs">
+              Crafted from 240 GSM organic ring-spun cotton and Japanese direct-to-garment wash-resistant pigments.
             </p>
           </div>
         </div>

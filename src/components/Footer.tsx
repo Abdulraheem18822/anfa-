@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   MapPin,
   Clock,
@@ -6,45 +6,32 @@ import {
   Phone,
   ArrowUp,
   Facebook,
-  Twitter,
-  Dribbble,
   Instagram,
-  Youtube,
-  CheckCircle2,
+  HelpCircle,
+  FileText,
+  RotateCcw,
+  BookOpen,
 } from 'lucide-react';
 import { StoreSettings } from '../types/store';
+import { CustomerCareTab } from './CustomerCareModal';
 
 interface FooterProps {
   settings: StoreSettings;
+  onOpenCareTab?: (tab: CustomerCareTab) => void;
   onOpenPage?: (pageTitle: string) => void;
   onSelectCategory?: (category: string) => void;
-  onOpenCustomizer?: () => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
   settings,
+  onOpenCareTab,
   onOpenPage,
-  onSelectCategory,
-  onOpenCustomizer,
 }) => {
-  const [emailInput, setEmailInput] = useState('');
-  const [isSubscribed, setIsSubscribed] = useState(false);
-
-  const handleSubscribe = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (emailInput.trim()) {
-      setIsSubscribed(true);
-      setTimeout(() => {
-        setEmailInput('');
-      }, 2500);
-    }
-  };
-
-  const handleLinkClick = (pageTitle: string) => {
-    if (onOpenPage) {
-      onOpenPage(pageTitle);
-    } else {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+  const handleCareClick = (tab: CustomerCareTab) => {
+    if (onOpenCareTab) {
+      onOpenCareTab(tab);
+    } else if (onOpenPage) {
+      onOpenPage(tab);
     }
   };
 
@@ -52,207 +39,166 @@ export const Footer: React.FC<FooterProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const instagramUrl = settings.instagramUrl || 'https://www.instagram.com/anfa_print_wear/';
+  const facebookUrl = settings.facebookUrl || 'https://www.facebook.com/profile.php?id=61583160363825';
+
   return (
     <footer id="footer-section" className="bg-[#0c131a] text-neutral-300 pt-16 pb-8 border-t border-neutral-800 select-none">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Main 4-Column Footer Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-12 mb-14">
-          {/* Column 1: Brand & About Links */}
+        {/* Main 3-Column Footer Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-10 lg:gap-14 mb-12">
+          {/* Column 1: Brand & Craftsmanship */}
           <div className="space-y-4">
             <div className="flex items-center">
               <span className="font-['Oswald'] font-black text-2xl sm:text-3xl tracking-widest text-white uppercase">
-                {settings.storeName || 'ORITINA'}
+                {settings.storeName || 'ANFA PRINT WEAR'}
               </span>
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 ml-1 shadow-[0_0_8px_rgba(251,191,36,0.8)] inline-block"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 ml-1.5 shadow-[0_0_8px_rgba(251,191,36,0.8)] inline-block"></span>
             </div>
-            <p className="text-xs text-neutral-400 leading-relaxed">
-              {settings.tagline || 'Premium Print On Demand Apparel & Custom Streetwear'}
+            <p className="text-xs text-neutral-400 leading-relaxed max-w-sm">
+              {settings.tagline || 'Premium Print On Demand Apparel & Custom Streetwear'}. Handpicked from the best designers with heavyweight 240 GSM organic cotton and high-definition direct-to-garment pigment printing.
             </p>
 
-            <ul className="space-y-2.5 text-xs text-neutral-400">
-              <li>
-                <button onClick={() => handleLinkClick('About us')} className="hover:text-white transition">
-                  About us
-                </button>
-              </li>
-              <li>
-                <button onClick={() => handleLinkClick('Reasons to shop')} className="hover:text-white transition">
-                  Reasons to shop
-                </button>
-              </li>
-              <li>
-                <button onClick={() => handleLinkClick('What our customers say')} className="hover:text-white transition">
-                  What our customers say
-                </button>
-              </li>
-              <li>
-                <button onClick={() => handleLinkClick('Meet the team')} className="hover:text-white transition">
-                  Meet the team
-                </button>
-              </li>
-              {onOpenCustomizer && (
-                <li>
-                  <button onClick={onOpenCustomizer} className="text-amber-400 hover:text-amber-300 font-semibold transition">
-                    ★ Launch POD Customizer Studio
-                  </button>
-                </li>
-              )}
-            </ul>
-          </div>
-
-          {/* Column 2: Customer Care / Policy Links */}
-          <div className="space-y-4">
-            <h4 className="text-sm font-['Montserrat',sans-serif] font-bold text-white uppercase tracking-wider">
-              Customer Care
-            </h4>
-            <ul className="space-y-2.5 text-xs text-neutral-400">
-              <li>
-                <button onClick={() => handleLinkClick('Contact us')} className="hover:text-white transition">
-                  Contact us
-                </button>
-              </li>
-              <li>
-                <button onClick={() => handleLinkClick('Help and advice')} className="hover:text-white transition">
-                  Help and advice
-                </button>
-              </li>
-              <li>
-                <button onClick={() => handleLinkClick('Delivery')} className="hover:text-white transition">
-                  Delivery (Free over {settings.currencySymbol}{settings.freeDeliveryThreshold})
-                </button>
-              </li>
-              <li>
-                <button onClick={() => handleLinkClick('Terms and conditions')} className="hover:text-white transition">
-                  Terms and conditions
-                </button>
-              </li>
-              <li>
-                <button onClick={() => handleLinkClick('Refund Policy')} className="hover:text-white transition">
-                  Refund Policy (30-Day Guarantee)
-                </button>
-              </li>
-              <li>
-                <button onClick={() => handleLinkClick('FAQs')} className="hover:text-white transition">
-                  FAQs & DTG Care Guide
-                </button>
-              </li>
-            </ul>
-          </div>
-
-          {/* Column 3: Newsletter & Social */}
-          <div className="space-y-4">
-            <h4 className="text-sm font-['Montserrat',sans-serif] font-bold text-white uppercase tracking-wider">
-              Newsletter
-            </h4>
-            <p className="text-xs text-neutral-400 leading-relaxed">
-              Join up to get the latest on drops, summer sales, and private promo codes.
-            </p>
-
-            {/* Newsletter Input Form */}
-            <form onSubmit={handleSubscribe} className="space-y-2">
-              <div className="flex flex-col sm:flex-row items-stretch gap-2">
-                <input
-                  id="newsletter-email-input"
-                  type="email"
-                  required
-                  value={emailInput}
-                  onChange={(e) => setEmailInput(e.target.value)}
-                  placeholder="Enter Your Email"
-                  className="flex-1 bg-white text-neutral-900 text-xs px-3.5 py-2.5 rounded-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-                />
-                <button
-                  id="newsletter-subscribe-btn"
-                  type="submit"
-                  className="bg-[#E85A19] hover:bg-[#D94F0E] text-white font-['Oswald'] font-bold text-xs tracking-wider uppercase px-4 py-2.5 rounded-sm transition active:scale-95 whitespace-nowrap"
+            <div className="pt-2">
+              <p className="text-[11px] font-bold tracking-widest text-neutral-400 uppercase mb-2.5">
+                Connect With Us On Social
+              </p>
+              <div className="flex items-center space-x-3 text-neutral-400">
+                {/* Instagram Direct Link */}
+                <a
+                  id="footer-instagram-link"
+                  href={instagramUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 rounded-full bg-neutral-900 hover:bg-gradient-to-tr hover:from-amber-500 hover:to-rose-500 hover:text-white flex items-center justify-center transition shadow-md group border border-neutral-800"
+                  aria-label="Visit Anfa Print Wear on Instagram"
                 >
-                  SUBSCRIBE
-                </button>
-              </div>
-              {isSubscribed && (
-                <div className="flex items-center space-x-1 text-emerald-400 text-xs mt-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Thank you for subscribing! Check your inbox for 15% off.</span>
-                </div>
-              )}
-            </form>
+                  <Instagram className="w-4 h-4 text-neutral-300 group-hover:text-white" />
+                </a>
 
-            {/* Social Icons */}
-            <div className="flex items-center space-x-4 pt-2 text-neutral-400">
-              <a href="#facebook" className="hover:text-white transition" aria-label="Facebook">
-                <Facebook className="w-4 h-4" />
-              </a>
-              <a href="#twitter" className="hover:text-white transition" aria-label="Twitter">
-                <Twitter className="w-4 h-4" />
-              </a>
-              <a href="#dribbble" className="hover:text-white transition" aria-label="Dribbble">
-                <Dribbble className="w-4 h-4" />
-              </a>
-              <a href="#instagram" className="hover:text-white transition" aria-label="Instagram">
-                <Instagram className="w-4 h-4" />
-              </a>
-              <a href="#youtube" className="hover:text-white transition" aria-label="YouTube">
-                <Youtube className="w-4 h-4" />
-              </a>
+                {/* Facebook Direct Link */}
+                <a
+                  id="footer-facebook-link"
+                  href={facebookUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 rounded-full bg-neutral-900 hover:bg-blue-600 hover:text-white flex items-center justify-center transition shadow-md group border border-neutral-800"
+                  aria-label="Visit Anfa Print Wear on Facebook"
+                >
+                  <Facebook className="w-4 h-4 text-neutral-300 group-hover:text-white" />
+                </a>
+              </div>
             </div>
           </div>
 
-          {/* Column 4: Contact Us Information */}
+          {/* Column 2: Customer Care Links */}
           <div className="space-y-4">
-            <h4 className="text-sm font-['Montserrat',sans-serif] font-bold text-white uppercase tracking-wider">
-              Contact Us
+            <h4 className="text-sm font-['Montserrat',sans-serif] font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+              <span>Customer Care</span>
             </h4>
             <ul className="space-y-3 text-xs text-neutral-400">
+              <li>
+                <button
+                  id="footer-link-help"
+                  onClick={() => handleCareClick('help')}
+                  className="hover:text-amber-400 transition flex items-center space-x-2 text-left"
+                >
+                  <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Help & Advice</span>
+                </button>
+              </li>
+              <li>
+                <button
+                  id="footer-link-terms"
+                  onClick={() => handleCareClick('terms')}
+                  className="hover:text-amber-400 transition flex items-center space-x-2 text-left"
+                >
+                  <FileText className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Terms & Conditions</span>
+                </button>
+              </li>
+              <li>
+                <button
+                  id="footer-link-refund"
+                  onClick={() => handleCareClick('refund')}
+                  className="hover:text-amber-400 transition flex items-center space-x-2 text-left"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Refund Policy (Standard 30-Day Policy)</span>
+                </button>
+              </li>
+              <li>
+                <button
+                  id="footer-link-faqs"
+                  onClick={() => handleCareClick('faqs')}
+                  className="hover:text-amber-400 transition flex items-center space-x-2 text-left"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                  <span>FAQs & E-Gift Care Guides</span>
+                </button>
+              </li>
+              <li>
+                <button
+                  id="footer-link-contact"
+                  onClick={() => handleCareClick('contact')}
+                  className="hover:text-amber-400 transition flex items-center space-x-2 text-left"
+                >
+                  <Mail className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Contact Us (Customer Support)</span>
+                </button>
+              </li>
+            </ul>
+          </div>
+
+          {/* Column 3: Contact Info & Working Hours */}
+          <div className="space-y-4">
+            <h4 className="text-sm font-['Montserrat',sans-serif] font-bold text-white uppercase tracking-wider">
+              Get In Touch
+            </h4>
+            <ul className="space-y-3.5 text-xs text-neutral-400">
               <li className="flex items-start space-x-2.5">
-                <MapPin className="w-4 h-4 text-neutral-400 flex-shrink-0 mt-0.5" />
-                <span className="leading-snug">{settings.address}</span>
+                <MapPin className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                <span className="leading-snug text-neutral-300">
+                  {settings.address || 'Nilofar complex, main road, cloth market, Bhainsa, telangana, 504103'}
+                </span>
               </li>
               <li className="flex items-start space-x-2.5">
-                <Clock className="w-4 h-4 text-neutral-400 flex-shrink-0 mt-0.5" />
-                <span className="leading-snug">{settings.workingHours}</span>
+                <Clock className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                <span className="leading-snug font-medium text-neutral-300">
+                  {settings.workingHours || 'Monday - Saturday / 10:00 AM - 08:00 PM IST'}
+                </span>
               </li>
-              <li className="flex items-center space-x-2.5">
-                <Mail className="w-4 h-4 text-neutral-400 flex-shrink-0" />
-                <a href={`mailto:${settings.email}`} className="hover:text-white transition">
-                  {settings.email}
+              <li className="flex items-center space-x-2.5 pt-1">
+                <Mail className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                <a
+                  href={`mailto:${settings.email || 'anfa.store01@gmail.com'}`}
+                  className="hover:text-white transition font-medium text-neutral-200"
+                >
+                  {settings.email || 'anfa.store01@gmail.com'}
                 </a>
               </li>
               <li className="flex items-center space-x-2.5">
-                <Phone className="w-4 h-4 text-neutral-400 flex-shrink-0" />
-                <a href={`tel:${settings.phone.replace(/[^0-9+]/g, '')}`} className="hover:text-white transition font-mono">
-                  {settings.phone}
+                <Phone className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                <a
+                  href={`tel:${(settings.phone || '960334954').replace(/[^0-9+]/g, '')}`}
+                  className="hover:text-white transition font-mono font-medium text-neutral-200"
+                >
+                  {settings.phone || '960334954'}
                 </a>
               </li>
             </ul>
           </div>
         </div>
 
-        {/* Bottom Bar: Copyright & Payment Gateways */}
+        {/* Bottom Bar: Copyright */}
         <div className="pt-8 border-t border-neutral-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-neutral-500">
           <p>
-            Copyright © {settings.copyrightYear} design by {settings.storeName || 'Vinavathemes'}. All rights reserved.
+            Copyright © {settings.copyrightYear || 2026} {settings.storeName || 'Anfa Print Wear'}. All rights reserved.
           </p>
 
-          {/* Payment Gateways Badges */}
-          <div className="flex items-center space-x-2">
-            <div className="h-6 px-2 bg-white rounded flex items-center justify-center space-x-[-4px]">
-              <div className="w-3.5 h-3.5 rounded-full bg-red-600 opacity-90" />
-              <div className="w-3.5 h-3.5 rounded-full bg-blue-600 opacity-90" />
-            </div>
-            <div className="h-6 px-2.5 bg-white rounded flex items-center justify-center">
-              <span className="text-[10px] font-black italic tracking-tighter text-blue-900 font-sans">
-                VISA
-              </span>
-            </div>
-            <div className="h-6 px-2.5 bg-white rounded flex items-center justify-center">
-              <span className="text-[10px] font-bold italic text-blue-600 font-sans">
-                Pay<span className="text-sky-500">Pal</span>
-              </span>
-            </div>
-            <div className="h-6 px-2 bg-white rounded flex items-center justify-center space-x-[-3px]">
-              <div className="w-3 h-3 rounded-full bg-sky-500" />
-              <div className="w-3 h-3 rounded-full bg-blue-700" />
-            </div>
-          </div>
+          <p className="text-[11px] text-neutral-400">
+            Nilofar complex, main road, cloth market, Bhainsa, Telangana, 504103, India.
+          </p>
         </div>
       </div>
 

@@ -11,7 +11,6 @@ interface CartDrawerProps {
   onUpdateQuantity: (id: string, delta: number) => void;
   onRemoveItem: (id: string) => void;
   onClearCart: () => void;
-  onOpenCustomizer: () => void;
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
@@ -22,7 +21,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onUpdateQuantity,
   onRemoveItem,
   onClearCart,
-  onOpenCustomizer,
 }) => {
   if (!isOpen) return null;
 
@@ -176,16 +174,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         className="py-2.5 px-4 bg-neutral-900 hover:bg-black text-white font-semibold text-xs rounded-xl transition"
                       >
                         Browse Collections
-                      </button>
-                      <button
-                        onClick={() => {
-                          onClose();
-                          onOpenCustomizer();
-                        }}
-                        className="py-2.5 px-4 bg-amber-400 hover:bg-amber-500 text-black font-semibold text-xs rounded-xl flex items-center justify-center space-x-1.5 transition"
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>Launch POD Studio</span>
                       </button>
                     </div>
                   </div>

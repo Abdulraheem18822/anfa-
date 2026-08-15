@@ -1,6 +1,6 @@
 {
-  "name": "Oritina Apparel - Print On Demand T-Shirts",
-  "description": "Print-on-demand t-shirt ecommerce landing page with hero banners, product showcase, quick view modal, cart and interactive customizer.",
+  "name": "Anfa Print Wear - Print On Demand T-Shirts",
+  "description": "Print-on-demand custom t-shirt ecommerce storefront with interactive customizer, product catalog, customer care center, and contact forms.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
