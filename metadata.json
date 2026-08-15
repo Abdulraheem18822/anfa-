@@ -1,0 +1,6 @@
+{
+  "name": "Oritina Apparel - Print On Demand T-Shirts",
+  "description": "Print-on-demand t-shirt ecommerce landing page with hero banners, product showcase, quick view modal, cart and interactive customizer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
