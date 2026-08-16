@@ -87,9 +87,9 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
   // Authentication State
   const [adminUser, setAdminUser] = useState<AdminUser | null>(getStoredAdminUser());
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!getStoredAdminToken());
-  const [loginEmail, setLoginEmail] = useState('abdulraheem18822@gmail.com');
-  const [loginPassword, setLoginPassword] = useState('Shifa@2907');
-  const [rememberMe, setRememberMe] = useState(true);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
@@ -248,6 +248,8 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
     await logoutAdmin();
     setAdminUser(null);
     setIsAuthenticated(false);
+    setLoginEmail('');
+    setLoginPassword('');
     showToast('Administrator logged out successfully.');
   };
 
@@ -564,8 +566,9 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                       type="email"
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
-                      placeholder="abdulraheem18822@gmail.com"
+                      placeholder="Enter administrator email"
                       required
+                      autoComplete="off"
                       className="w-full bg-neutral-950 border border-neutral-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400 transition"
                     />
                   </div>
@@ -581,8 +584,9 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                       type="password"
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
-                      placeholder="••••••••••••"
+                      placeholder="Enter security password"
                       required
+                      autoComplete="new-password"
                       className="w-full bg-neutral-950 border border-neutral-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400 transition font-mono"
                     />
                   </div>
@@ -596,7 +600,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                       onChange={(e) => setRememberMe(e.target.checked)}
                       className="rounded bg-neutral-900 border-neutral-700 text-amber-400 focus:ring-0"
                     />
-                    <span>Keep admin session active</span>
+                    <span>Remember on this device</span>
                   </label>
                   <span className="text-[11px] text-amber-400/80 font-mono">256-Bit Encrypted</span>
                 </div>
@@ -619,26 +623,6 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                   )}
                 </button>
               </form>
-
-              {/* Quick Fill Demo Helper Button for Owner */}
-              <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-center space-y-1">
-                <p className="text-[11px] text-neutral-400">Master Credentials Authorized:</p>
-                <div className="flex items-center justify-center space-x-2 text-[11px] font-mono text-amber-400">
-                  <span>abdulraheem18822@gmail.com</span>
-                  <span>•</span>
-                  <span>Shifa@2907</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginEmail('abdulraheem18822@gmail.com');
-                    setLoginPassword('Shifa@2907');
-                  }}
-                  className="text-[10px] text-neutral-400 hover:text-amber-400 underline pt-1 cursor-pointer"
-                >
-                  Auto-fill master credentials
-                </button>
-              </div>
 
               {/* Footer info */}
               <div className="text-center text-[10px] text-neutral-500 flex items-center justify-center space-x-2">
