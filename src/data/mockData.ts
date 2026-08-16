@@ -22,9 +22,9 @@ export const DEFAULT_STORE_SETTINGS = initialStoreSettings;
 export const INITIAL_USER: UserProfile = {
   id: 'user-demo',
   name: 'Valued Customer',
-  email: 'support.store01@gmail.com',
+  email: 'anfa.store01@gmail.com',
   avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&q=80',
-  phone: '+91 9603344954',
+  phone: '9603344954',
   address: 'Nilofar complex, main road, cloth market',
   city: 'Bhainsa, Telangana',
   country: 'India',

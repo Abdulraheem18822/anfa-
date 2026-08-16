@@ -18,6 +18,7 @@ import {
   Search,
 } from 'lucide-react';
 import { UserProfile, StoreSettings } from '../types/store';
+import { logCustomerAuthEvent } from '../lib/adminApi';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -123,15 +124,28 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     if (!loginIdentifier.trim()) return;
 
     const isEmail = loginIdentifier.includes('@');
+    const userEmail = isEmail ? loginIdentifier.trim() : `${loginIdentifier.trim()}@anfaprintwear.in`;
+    const userName = isEmail ? loginIdentifier.split('@')[0] : 'Customer';
+
     const newUser: UserProfile = {
       id: `user-${Date.now()}`,
-      name: isEmail ? loginIdentifier.split('@')[0] : 'Customer',
-      email: isEmail ? loginIdentifier.trim() : `${loginIdentifier.trim()}@anfaprintwear.in`,
+      name: userName,
+      email: userEmail,
       phone: !isEmail ? loginIdentifier.trim() : '+91 9603344954',
       address: 'Nilofar complex, main road, cloth market',
       city: 'Bhainsa, Telangana, 504103',
       country: 'India',
     };
+
+    // Log customer login event for admin monitoring
+    logCustomerAuthEvent({
+      userId: newUser.id,
+      userEmail: newUser.email || '',
+      userName: newUser.name,
+      eventType: 'login',
+      status: 'success',
+      details: 'Customer authenticated via storefront login modal.',
+    });
 
     onAddNewUser(newUser);
   };
@@ -150,7 +164,31 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       country: 'India',
     };
 
+    // Log customer signup event for admin monitoring
+    logCustomerAuthEvent({
+      userId: newUser.id,
+      userEmail: newUser.email,
+      userName: newUser.name,
+      eventType: 'signup',
+      status: 'success',
+      details: 'New customer account registered on ANFA storefront.',
+    });
+
     onAddNewUser(newUser);
+  };
+
+  const handleLogoutCustomer = () => {
+    if (currentUser) {
+      logCustomerAuthEvent({
+        userId: currentUser.id,
+        userEmail: currentUser.email || '',
+        userName: currentUser.name,
+        eventType: 'logout',
+        status: 'success',
+        details: 'Customer logged out of active session.',
+      });
+    }
+    if (onLogout) onLogout();
   };
 
   const handleSaveAccount = (e: React.FormEvent) => {
@@ -212,7 +250,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           <div className="flex items-center space-x-2">
             {currentUser && onLogout && (
               <button
-                onClick={onLogout}
+                onClick={handleLogoutCustomer}
                 className="text-xs font-bold text-rose-400 hover:text-rose-300 bg-neutral-800 hover:bg-neutral-700 px-3 py-1.5 rounded-lg flex items-center space-x-1 transition"
                 title="Log Out"
               >

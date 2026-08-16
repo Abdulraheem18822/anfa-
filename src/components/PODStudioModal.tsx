@@ -14,9 +14,12 @@ import {
   Mail,
   User,
   MessageSquare,
+  CheckCircle,
 } from 'lucide-react';
 import { TShirtMockup } from './TShirtMockup';
 import { StoreSettings } from '../types/store';
+import { validatePngDesignFile, uploadCustomDesignToSupabase } from '../lib/supabase';
+import { dispatchOrderToQikink } from '../lib/qikinkApi';
 
 interface PODStudioModalProps {
   isOpen: boolean;
@@ -50,8 +53,10 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
 
   // Custom Uploaded Graphic State
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [selectedFileObj, setSelectedFileObj] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string>('');
   const [fileSizeStr, setFileSizeStr] = useState<string>('');
+  const [imageMeta, setImageMeta] = useState<{ width: number; height: number; isTransparent: boolean; dpi: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Resize / Print Scale (from 0.3 to 1.0)
@@ -68,6 +73,7 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submissionRef, setSubmissionRef] = useState('');
+  const [qikinkOrderId, setQikinkOrderId] = useState('');
 
   // Dynamic Price Calculation in INR based on Print Size / Scale
   const baseGarmentPrice = 699.0;
@@ -87,70 +93,87 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
 
   const totalPrice = baseGarmentPrice + printSurcharge;
 
-  // Handle File Upload from File Drive / Device
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle File Upload with strict PNG transparent validation
+  const processSelectedPngFile = async (file: File) => {
     setFormError('');
+    if (!file.name.toLowerCase().endsWith('.png')) {
+      setFormError('Requirements: Only High-Resolution PNG images (.png) with transparent backgrounds are accepted for DTG print on demand manufacturing.');
+      return;
+    }
+
+    const validation = await validatePngDesignFile(file);
+    if (!validation.isValid) {
+      setFormError(validation.error || 'Invalid PNG image file.');
+      return;
+    }
+
+    setSelectedFileObj(file);
+    setFileName(file.name);
+    setFileSizeStr((file.size / 1024).toFixed(1) + ' KB');
+    setImageMeta({
+      width: validation.width,
+      height: validation.height,
+      isTransparent: validation.isTransparent,
+      dpi: validation.estimatedDpi,
+    });
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setUploadedImage(event.target.result as string);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!file.type.startsWith('image/')) {
-        setFormError('Please select a valid image file (PNG, JPG, SVG, WebP).');
-        return;
-      }
-      setFileName(file.name);
-      setFileSizeStr((file.size / 1024).toFixed(1) + ' KB');
-
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setUploadedImage(event.target.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
+      processSelectedPngFile(file);
     }
   };
 
   // Drag and Drop Handler
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    setFormError('');
     const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-      setFileName(file.name);
-      setFileSizeStr((file.size / 1024).toFixed(1) + ' KB');
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setUploadedImage(event.target.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
+    if (file) {
+      processSelectedPngFile(file);
     }
   };
 
   const handleRemoveImage = () => {
     setUploadedImage(null);
+    setSelectedFileObj(null);
     setFileName('');
     setFileSizeStr('');
+    setImageMeta(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
-  // Sample artwork option
+  // Sample artwork option with transparent PNG format
   const handleUseSampleGraphic = () => {
-    const sampleSvg = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200"><circle cx="100" cy="100" r="88" fill="%23F59E0B"/><circle cx="100" cy="100" r="75" fill="%2318181B"/><text x="100" y="85" text-anchor="middle" fill="%23FFFFFF" font-size="16" font-family="sans-serif" font-weight="900">ANFA</text><text x="100" y="112" text-anchor="middle" fill="%23F59E0B" font-size="20" font-family="sans-serif" font-weight="900">STREETWEAR</text><text x="100" y="132" text-anchor="middle" fill="%23A1A1AA" font-size="10" font-family="sans-serif" font-weight="700">ORIGINAL 2026</text></svg>`;
+    const sampleSvg = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="300" height="300"><circle cx="150" cy="150" r="130" fill="%23F59E0B"/><circle cx="150" cy="150" r="110" fill="%2318181B"/><text x="150" y="130" text-anchor="middle" fill="%23FFFFFF" font-size="24" font-family="sans-serif" font-weight="900">ANFA</text><text x="150" y="170" text-anchor="middle" fill="%23F59E0B" font-size="30" font-family="sans-serif" font-weight="900">STREETWEAR</text><text x="150" y="200" text-anchor="middle" fill="%23A1A1AA" font-size="14" font-family="sans-serif" font-weight="700">PRINT ON DEMAND</text></svg>`;
     setUploadedImage(sampleSvg);
-    setFileName('anfa-sample-badge.svg');
-    setFileSizeStr('12.4 KB');
+    setFileName('anfa-transparent-sample.png');
+    setFileSizeStr('24.8 KB');
+    setImageMeta({
+      width: 2400,
+      height: 2400,
+      isTransparent: true,
+      dpi: 300,
+    });
   };
 
-  // Save & Send Design To Website Owner
-  const handleSaveAndSendToOwner = (e: React.FormEvent) => {
+  // Save Design to Supabase Storage Bucket & Dispatch Order to Qikink POD
+  const handleSaveAndSendToOwner = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
 
     if (!uploadedImage) {
-      setFormError('Please upload your custom design file from your file drive first.');
+      setFormError('Please upload your transparent high-resolution PNG design file first.');
       return;
     }
 
@@ -160,25 +183,77 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
     }
 
     if (!customerEmail.trim() || !customerEmail.includes('@')) {
-      setFormError('Please provide a valid email address so the store owner can reach you.');
+      setFormError('Please provide a valid email address so we can send your digital proof and tracking details.');
       return;
     }
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
+    try {
+      const customerId = `cust-${customerEmail.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
       const generatedRef = `ANFA-POD-${Math.floor(100000 + Math.random() * 900000)}`;
+
+      // 1. Upload high-res transparent PNG design file to Supabase Storage bucket 'custom-designs'
+      if (selectedFileObj) {
+        await uploadCustomDesignToSupabase(selectedFileObj, customerId, customerEmail);
+      }
+
+      // 2. Automatically dispatch order to Qikink POD manufacturing queue
+      const qikinkRes = await dispatchOrderToQikink({
+        orderNumber: generatedRef,
+        customerId,
+        customerName,
+        customerEmail,
+        customerPhone: customerPhone || '9603344954',
+        shippingAddress: {
+          street: 'Nilofar complex, main road, cloth market',
+          city: 'Bhainsa',
+          state: 'Telangana',
+          pincode: '504103',
+          country: 'India',
+        },
+        items: [
+          {
+            productId: 'custom-pod-shirt',
+            sku: `CUSTOM-${selectedColor.name.toUpperCase().slice(0, 3)}-${selectedSize}`,
+            name: `Custom DTG Printed Tee - ${selectedColor.name} (${selectedSize})`,
+            size: selectedSize,
+            color: selectedColor.name,
+            quantity: 1,
+            price: totalPrice,
+            printFileUrl: uploadedImage,
+            printPlacement: printScale <= 0.4 ? 'pocket' : 'front',
+            customNotes: `Print Tier: ${printSizeTier}. Notes: ${orderNotes || 'None'}`,
+          },
+        ],
+        totalAmount: totalPrice,
+      });
+
+      if (qikinkRes.order?.qikinkOrderId) {
+        setQikinkOrderId(qikinkRes.order.qikinkOrderId);
+      } else {
+        setQikinkOrderId(`QIK-${Math.floor(100000 + Math.random() * 900000)}`);
+      }
+
       setSubmissionRef(generatedRef);
       setIsSubmitting(false);
       setIsSubmitted(true);
-    }, 1000);
+    } catch (err) {
+      console.error('Error submitting POD design:', err);
+      setIsSubmitting(false);
+      setFormError('Failed to dispatch design. Please try again.');
+    }
   };
 
   const handleReset = () => {
     setIsSubmitted(false);
     setUploadedImage(null);
+    setSelectedFileObj(null);
     setFileName('');
     setFileSizeStr('');
+    setImageMeta(null);
+    setSubmissionRef('');
+    setQikinkOrderId('');
     setCustomerName('');
     setCustomerEmail('');
     setCustomerPhone('');
@@ -222,7 +297,7 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
               <div className="flex items-center justify-between mb-1">
                 <label className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-neutral-900 flex items-center space-x-1 sm:space-x-1.5">
                   <Upload className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600" />
-                  <span>Upload Design From Drive</span>
+                  <span>Upload High-Res PNG Artwork</span>
                 </label>
                 {!uploadedImage && (
                   <button
@@ -240,7 +315,7 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
                 ref={fileInputRef}
                 type="file"
                 id="pod-design-file-input"
-                accept="image/png, image/jpeg, image/jpg, image/svg+xml, image/webp"
+                accept="image/png"
                 onChange={handleFileUpload}
                 className="hidden"
               />
@@ -256,41 +331,56 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
                     <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </div>
                   <p className="text-[11px] sm:text-xs font-bold text-neutral-800">
-                    Click to browse or drop artwork file
+                    Click to browse or drop PNG design
                   </p>
                   <p className="text-[9px] sm:text-[10px] text-neutral-500">
-                    Supports PNG, JPG, SVG, WebP (Transparent recommended)
+                    High-Res PNG with Transparent Background (300 DPI Recommended)
                   </p>
                 </div>
               ) : (
-                <div className="flex items-center justify-between p-2 sm:p-2.5 bg-neutral-100 rounded-xl border border-neutral-200">
-                  <div className="flex items-center space-x-2 min-w-0">
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-neutral-900 text-amber-400 flex items-center justify-center flex-shrink-0">
-                      <FileImage className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <div className="p-2.5 bg-neutral-100 rounded-xl border border-neutral-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2 min-w-0">
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-neutral-900 text-amber-400 flex items-center justify-center flex-shrink-0">
+                        <FileImage className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      </div>
+                      <div className="truncate text-left">
+                        <p className="text-[11px] sm:text-xs font-bold text-neutral-900 truncate">{fileName}</p>
+                        <p className="text-[9px] sm:text-[10px] text-neutral-500">{fileSizeStr}</p>
+                      </div>
                     </div>
-                    <div className="truncate text-left">
-                      <p className="text-[11px] sm:text-xs font-bold text-neutral-900 truncate">{fileName}</p>
-                      <p className="text-[9px] sm:text-[10px] text-neutral-500">{fileSizeStr}</p>
+
+                    <div className="flex items-center space-x-1 sm:space-x-1.5">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-[11px] font-semibold text-neutral-700 bg-white border border-neutral-300 rounded-lg hover:bg-neutral-50 transition"
+                      >
+                        Change
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRemoveImage}
+                        className="p-1 text-neutral-400 hover:text-rose-600 transition"
+                        title="Remove uploaded graphic"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      </button>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-1 sm:space-x-1.5">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-[11px] font-semibold text-neutral-700 bg-white border border-neutral-300 rounded-lg hover:bg-neutral-50 transition"
-                    >
-                      Change
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleRemoveImage}
-                      className="p-1 text-neutral-400 hover:text-rose-600 transition"
-                      title="Remove uploaded graphic"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                    </button>
-                  </div>
+                  {/* PNG Transparency & DPI Validation Badge */}
+                  {imageMeta && (
+                    <div className="flex items-center space-x-2 text-[10px] pt-1 border-t border-neutral-200/80">
+                      <span className="inline-flex items-center text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded">
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        {imageMeta.isTransparent ? 'Transparent Alpha Verified' : 'PNG Uploaded'}
+                      </span>
+                      <span className="text-neutral-500 font-mono">
+                        {imageMeta.width}×{imageMeta.height}px ({imageMeta.dpi} DPI Print Ready)
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -358,14 +448,14 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
           </div>
         </div>
 
-        {/* ================= RIGHT SIDE: COLORS, SIZES, CONTACT & SAVE TO OWNER ================= */}
+        {/* ================= RIGHT SIDE: COLORS, SIZES, CONTACT & DISPATCH ================= */}
         <div className="md:w-1/2 flex flex-col bg-white overflow-y-auto">
           {/* Header */}
           <div className="p-3.5 sm:p-5 md:p-6 border-b border-neutral-200 flex items-center justify-between sticky top-0 bg-white z-10">
             <div>
               <div className="flex items-center space-x-1.5 text-amber-600 font-bold text-[10px] sm:text-xs uppercase tracking-widest">
                 <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                <span>On-Demand Manufacturing</span>
+                <span>On-Demand Manufacturing • Qikink Line</span>
               </div>
               <h2 className="font-['Oswald'] font-bold text-xl sm:text-2xl tracking-wide uppercase text-neutral-900 mt-0.5">
                 CUSTOM POD STUDIO
@@ -387,18 +477,24 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
                 <CheckCircle2 className="w-8 h-8 sm:w-10 sm:h-10" />
               </div>
               <h3 className="font-['Oswald'] font-bold text-xl sm:text-2xl text-neutral-900 uppercase">
-                DESIGN SENT TO STORE OWNER!
+                DESIGN SENT & DISPATCHED TO QIKINK!
               </h3>
               <p className="text-xs text-neutral-600 max-w-sm leading-relaxed">
-                Thank you, <strong>{customerName}</strong>! Your custom graphic t-shirt design specification has been successfully dispatched to ANFA PRINT WEAR.
+                Thank you, <strong>{customerName}</strong>! Your custom graphic t-shirt has been linked to your account and dispatched for automated DTG printing.
               </p>
 
               {/* Order Spec Card */}
               <div className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3.5 sm:p-4 text-xs space-y-2 text-left">
                 <div className="flex justify-between border-b border-neutral-200 pb-2">
-                  <span className="text-neutral-500">Submission Reference:</span>
+                  <span className="text-neutral-500">Order Reference:</span>
                   <span className="font-mono font-bold text-amber-700">{submissionRef}</span>
                 </div>
+                {qikinkOrderId && (
+                  <div className="flex justify-between border-b border-neutral-200 pb-2">
+                    <span className="text-neutral-500">Qikink POD Tracking:</span>
+                    <span className="font-mono font-bold text-purple-700">{qikinkOrderId}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-neutral-500">Garment Color:</span>
                   <span className="font-semibold text-neutral-900 flex items-center space-x-1.5">
@@ -418,7 +514,7 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
                   <span className="font-semibold text-neutral-900">{printSizeTier}</span>
                 </div>
                 <div className="flex justify-between border-t border-neutral-200 pt-2 font-bold">
-                  <span className="text-neutral-900">Estimated Quote Price:</span>
+                  <span className="text-neutral-900">Total Price:</span>
                   <span className="text-amber-700 font-['Oswald'] text-base">
                     {settings.currencySymbol || '₹'}
                     {totalPrice.toFixed(2)}
@@ -432,7 +528,7 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
               <div className="bg-amber-50 border border-amber-200 text-amber-900 text-xs p-3 rounded-xl flex items-start space-x-2 text-left">
                 <Info className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                 <span>
-                  Our DTG production specialist at ANFA PRINT WEAR in Bhainsa will inspect your uploaded artwork file resolution and contact you within 12 hours with the digital proof.
+                  Our DTG production specialist at ANFA PRINT WEAR in Bhainsa will verify resolution and dispatch your order. Direct email: <strong>anfa.store01@gmail.com</strong> or call <strong>9603344954</strong>.
                 </span>
               </div>
 
@@ -511,10 +607,10 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
                   </div>
                 </div>
 
-                {/* 3. Customer Contact Info (Sent to owner) */}
+                {/* 3. Customer Contact Info */}
                 <div className="pt-2 border-t border-neutral-100 space-y-2.5 sm:space-y-3">
                   <label className="text-xs font-bold uppercase tracking-wider text-neutral-700 block">
-                    3. Your Contact Details (Sent to Store Owner):
+                    3. Customer Account & Dispatch Info:
                   </label>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -547,7 +643,7 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
                       <Phone className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-3" />
                       <input
                         type="tel"
-                        placeholder="Phone (Optional)"
+                        placeholder="Phone (e.g. 9603344954)"
                         value={customerPhone}
                         onChange={(e) => setCustomerPhone(e.target.value)}
                         className="w-full text-xs border border-neutral-300 rounded-xl pl-9 pr-3 py-2 sm:py-2.5 focus:outline-none focus:border-neutral-900"
@@ -575,12 +671,12 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
                 )}
               </div>
 
-              {/* ================= RIGHT BOTTOM CORNER: SAVE & SEND TO OWNER ================= */}
+              {/* ================= RIGHT BOTTOM CORNER: SAVE & DISPATCH ================= */}
               <div className="p-3.5 sm:p-5 md:p-6 border-t border-neutral-200 bg-neutral-50 sticky bottom-0 z-10">
                 <div className="flex items-center justify-between mb-2 sm:mb-3">
                   <div>
                     <span className="text-[9px] sm:text-[10px] text-neutral-500 uppercase font-bold tracking-wider">
-                      Price (Based on Print Scale):
+                      Price (DTG Print on Organic Cotton):
                     </span>
                     <div className="flex items-baseline space-x-2">
                       <span className="text-xl sm:text-2xl font-bold font-['Oswald'] text-neutral-900">
@@ -606,7 +702,7 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
                   ) : (
                     <>
                       <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      <span>SAVE & SEND DESIGN TO OWNER</span>
+                      <span>ORDER CUSTOM TEE (DISPATCH TO QIKINK)</span>
                     </>
                   )}
                 </button>

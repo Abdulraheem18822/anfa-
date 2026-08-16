@@ -26,6 +26,7 @@ import { WishlistDrawer } from './components/WishlistDrawer';
 import { PODStudioModal } from './components/PODStudioModal';
 import { CustomerCareModal, CustomerCareTab } from './components/CustomerCareModal';
 import { UserProfileModal } from './components/UserProfileModal';
+import { AdminPortalModal } from './components/AdminPortalModal';
 import { TShirtMockup } from './components/TShirtMockup';
 
 export default function App() {
@@ -151,7 +152,29 @@ export default function App() {
   const [isWishlistOpen, setIsWishlistOpen] = useState<boolean>(false);
   const [isPODStudioOpen, setIsPODStudioOpen] = useState<boolean>(false);
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
+  const [isStoreAdminOpen, setIsStoreAdminOpen] = useState<boolean>(false);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+
+  // Dynamic Catalog State (Synced with Backend / Admin edits)
+  const [catalogProducts, setCatalogProducts] = useState<Product[]>(MOCK_PRODUCTS);
+
+  const refreshCatalog = async () => {
+    try {
+      const res = await fetch('/api/products');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.products) && json.products.length > 0) {
+          setCatalogProducts(json.products);
+        }
+      }
+    } catch {
+      // Keep MOCK_PRODUCTS fallback
+    }
+  };
+
+  useEffect(() => {
+    refreshCatalog();
+  }, []);
 
   // Customer Care & Contact Modal State
   const [isCareModalOpen, setIsCareModalOpen] = useState<boolean>(false);
@@ -331,8 +354,8 @@ export default function App() {
   };
 
   const wishlistProducts = useMemo(() => {
-    return MOCK_PRODUCTS.filter((p) => currentWishlistIds.includes(p.id));
-  }, [currentWishlistIds]);
+    return catalogProducts.filter((p) => currentWishlistIds.includes(p.id));
+  }, [catalogProducts, currentWishlistIds]);
 
   const handleMoveWishlistToCart = (product: Product) => {
     handleAddToCart(product);
@@ -343,7 +366,7 @@ export default function App() {
   };
 
   const handleOpenProductById = (productId: string) => {
-    const found = MOCK_PRODUCTS.find((p) => p.id === productId);
+    const found = catalogProducts.find((p) => p.id === productId) || MOCK_PRODUCTS.find((p) => p.id === productId);
     if (found) {
       setQuickViewProduct(found);
     }
@@ -418,7 +441,7 @@ export default function App() {
         onOpenCareTab={handleOpenCareTab}
         onSelectCategory={handleSelectCategoryAndScroll}
         onSearch={handleSearch}
-        products={MOCK_PRODUCTS}
+        products={catalogProducts}
         onSelectProduct={(p) => setQuickViewProduct(p)}
       />
 
@@ -453,7 +476,7 @@ export default function App() {
         {/* Our Products Grid with Category Tabs, Swatches, and Hover Actions */}
         <div id="products-section">
           <ProductGrid
-            products={MOCK_PRODUCTS}
+            products={catalogProducts}
             settings={settings}
             activeCategory={activeCategory}
             selectedCategory={activeCategory}
@@ -537,7 +560,7 @@ export default function App() {
         <InstagramGallery
           posts={MOCK_INSTAGRAM_POSTS}
           storeHandle={settings.socialHandle}
-          products={MOCK_PRODUCTS}
+          products={catalogProducts}
           onSelectProductById={handleOpenProductById}
         />
 
@@ -550,6 +573,15 @@ export default function App() {
         settings={settings}
         onSelectCategory={handleSelectCategoryAndScroll}
         onOpenCareTab={handleOpenCareTab}
+        onOpenAdminPortal={() => setIsStoreAdminOpen(true)}
+      />
+
+      {/* Secure Admin Command Center Modal */}
+      <AdminPortalModal
+        isOpen={isStoreAdminOpen}
+        onClose={() => setIsStoreAdminOpen(false)}
+        settings={settings}
+        onRefreshStorefrontCatalog={refreshCatalog}
       />
 
       {/* Customer Profile & User Switcher Modal */}

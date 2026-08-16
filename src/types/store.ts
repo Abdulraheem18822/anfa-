@@ -23,6 +23,7 @@ export type GraphicType =
 
 export interface Product {
   id: string;
+  sku?: string;
   name: string;
   price: number;
   originalPrice?: number;
@@ -40,6 +41,139 @@ export interface Product {
   graphicType: GraphicType;
   graphicUrl?: string;
   isGlowInDark?: boolean;
+  isLive?: boolean; // Qikink imported products can be draft or live
+  qikinkProductId?: string;
+  fabricGsm?: number | string; // 180, 220, 240, 280 GSM
+  fabricComposition?: string; // e.g. "100% Super-Combed Bio-Washed Cotton"
+  fitType?: 'oversized' | 'regular' | 'boxy' | 'slim';
+  printTechnique?: string; // e.g. "Direct-to-Garment (DTG) Digital Pigment"
+  qualityGrade?: string; // e.g. "Export Quality Grade A+"
+  stockStatus?: 'in_stock' | 'low_stock' | 'out_of_stock' | 'made_to_order_pod';
+  printSpecs?: {
+    printArea?: 'chest' | 'back' | 'pocket' | 'all-over';
+    dpi?: number;
+    recommendedWidth?: number;
+    recommendedHeight?: number;
+  };
+  tags?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface QikinkWebhookPayload {
+  event: 'product.created' | 'product.updated' | 'order.status_changed' | string;
+  timestamp?: string;
+  product?: {
+    qikink_id: string;
+    sku: string;
+    title: string;
+    description?: string;
+    base_price: number;
+    category?: string;
+    gender?: 'men' | 'women' | 'unisex';
+    colors?: { name: string; hex: string }[];
+    sizes?: string[];
+    mockup_urls?: string[];
+    print_area?: 'chest' | 'back' | 'pocket' | 'all-over';
+    print_dpi?: number;
+    tags?: string[];
+  };
+  order?: {
+    order_id: string;
+    qikink_order_id: string;
+    status: 'pending' | 'in_production' | 'printed' | 'packed' | 'shipped' | 'delivered' | 'cancelled';
+    tracking_number?: string;
+    courier_name?: string;
+  };
+}
+
+export interface QikinkFulfillmentOrder {
+  id: string;
+  orderNumber: string;
+  customerId?: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  shippingAddress: {
+    street: string;
+    city: string;
+    state: string;
+    pincode: string;
+    country: string;
+  };
+  items: {
+    productId: string;
+    sku?: string;
+    name: string;
+    size: string;
+    color: string;
+    quantity: number;
+    price: number;
+    printFileUrl?: string;
+    printPlacement?: 'front' | 'back' | 'pocket';
+    customNotes?: string;
+  }[];
+  totalAmount: number;
+  qikinkOrderId?: string;
+  qikinkStatus: 'pending' | 'sent_to_qikink' | 'in_production' | 'printed' | 'packed' | 'dispatched' | 'delivered' | 'failed';
+  trackingNumber?: string;
+  courierName?: string;
+  dispatchedAt?: string;
+  createdAt: string;
+  qikinkRawResponse?: Record<string, unknown>;
+}
+
+export interface CustomDesignUpload {
+  id: string;
+  customerId: string;
+  customerEmail?: string;
+  fileName: string;
+  fileUrl: string;
+  storagePath: string;
+  fileSizeBytes: number;
+  widthPx: number;
+  heightPx: number;
+  isTransparentPng: boolean;
+  dpiEstimated?: number;
+  createdAt: string;
+  approvalStatus?: 'pending_review' | 'approved_for_print' | 'revision_requested' | 'rejected';
+  adminNotes?: string;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  role: 'super_admin' | 'store_manager' | 'fulfillment_agent';
+  name: string;
+  avatar?: string;
+  token?: string;
+  lastLogin?: string;
+}
+
+export interface AuthEventLog {
+  id: string;
+  userId?: string;
+  userEmail: string;
+  userName?: string;
+  eventType: 'login' | 'logout' | 'signup' | 'password_reset' | 'session_active';
+  status: 'success' | 'failed';
+  ipAddress?: string;
+  userAgent?: string;
+  device?: string;
+  timestamp: string;
+  details?: string;
+}
+
+export interface AdminStats {
+  totalRevenue: number;
+  totalOrders: number;
+  pendingPodOrders: number;
+  liveProductsCount: number;
+  draftProductsCount: number;
+  customDesignsCount: number;
+  activeCustomersCount: number;
+  loginsTodayCount: number;
+  logoutsTodayCount: number;
 }
 
 export interface CartItem {

@@ -11,6 +11,7 @@ import {
   FileText,
   RotateCcw,
   BookOpen,
+  ShieldCheck,
 } from 'lucide-react';
 import { StoreSettings } from '../types/store';
 import { CustomerCareTab } from './CustomerCareModal';
@@ -20,12 +21,14 @@ interface FooterProps {
   onOpenCareTab?: (tab: CustomerCareTab) => void;
   onOpenPage?: (pageTitle: string) => void;
   onSelectCategory?: (category: string) => void;
+  onOpenAdminPortal?: () => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
   settings,
   onOpenCareTab,
   onOpenPage,
+  onOpenAdminPortal,
 }) => {
   const handleCareClick = (tab: CustomerCareTab) => {
     if (onOpenCareTab) {
@@ -180,10 +183,10 @@ export const Footer: React.FC<FooterProps> = ({
               <li className="flex items-center space-x-2.5">
                 <Phone className="w-4 h-4 text-amber-400 flex-shrink-0" />
                 <a
-                  href={`tel:${(settings.phone || '960334954').replace(/[^0-9+]/g, '')}`}
+                  href={`tel:${(settings.phone || '9603344954').replace(/[^0-9+]/g, '')}`}
                   className="hover:text-white transition font-mono font-medium text-neutral-200"
                 >
-                  {settings.phone || '960334954'}
+                  {settings.phone || '9603344954'}
                 </a>
               </li>
             </ul>
@@ -196,9 +199,22 @@ export const Footer: React.FC<FooterProps> = ({
             Copyright © {settings.copyrightYear || 2026} {settings.storeName || 'ANFA PRINT WEAR'}. All rights reserved.
           </p>
 
-          <p className="text-[11px] text-neutral-500">
-            Premium Direct-to-Garment (DTG) Custom Apparel & On-Demand Printing
-          </p>
+          <div className="flex items-center space-x-4">
+            <p className="text-[11px] text-neutral-500">
+              Premium Direct-to-Garment (DTG) Custom Apparel & On-Demand Printing
+            </p>
+            {onOpenAdminPortal && (
+              <button
+                id="footer-admin-portal-btn"
+                onClick={onOpenAdminPortal}
+                className="text-[11px] text-neutral-400 hover:text-amber-400 font-bold flex items-center space-x-1 transition px-2.5 py-1 rounded-md bg-neutral-900 border border-neutral-800 hover:border-amber-400/40"
+                title="Access Secure Store Administrator Command Dashboard"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                <span>ADMIN COMMAND PORTAL</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
