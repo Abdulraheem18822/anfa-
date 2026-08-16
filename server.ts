@@ -134,15 +134,22 @@ interface ServerAuthLog {
 // Master Admin Accounts & Active Sessions
 const ADMIN_ACCOUNTS = [
   {
+    email: 'abdulraheem18822@gmail.com',
+    passwordHash: 'Shifa@2907',
+    name: 'Abdul Raheem (Master Admin)',
+    role: 'super_admin',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+  },
+  {
     email: 'anfa.store01@gmail.com',
-    passwordHash: 'admin@anfa2026', // also accepts 'admin123' and 'anfa2026'
+    passwordHash: 'Shifa@2907',
     name: 'ANFA Store Administrator',
     role: 'super_admin',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
   },
   {
     email: 'admin@anfaprintwear.in',
-    passwordHash: 'admin@anfa2026',
+    passwordHash: 'Shifa@2907',
     name: 'Chief Production Manager',
     role: 'store_manager',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
@@ -1116,8 +1123,9 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
       (acc) => acc.email.toLowerCase() === cleanEmail
     );
 
-    // Accept master passwords for store owner: 'admin@anfa2026', 'admin123', 'anfa2026', or matching hash
+    // Accept master passwords for store owner: 'Shifa@2907', 'admin@anfa2026', or matching hash
     const isValidPassword =
+      cleanPassword === 'Shifa@2907' ||
       cleanPassword === 'admin@anfa2026' ||
       cleanPassword === 'admin123' ||
       cleanPassword === 'anfa2026' ||
@@ -1125,17 +1133,19 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
       (matchedAccount && matchedAccount.passwordHash === cleanPassword);
 
     const isAuthorizedEmail =
+      cleanEmail === 'abdulraheem18822@gmail.com' ||
       cleanEmail === 'anfa.store01@gmail.com' ||
       cleanEmail === 'admin@anfaprintwear.in' ||
       cleanEmail.includes('admin') ||
-      cleanEmail.includes('anfa');
+      cleanEmail.includes('anfa') ||
+      !!matchedAccount;
 
     if (isAuthorizedEmail && isValidPassword) {
       const sessionToken = `ADMIN_SES_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
       const adminData = {
-        id: matchedAccount ? matchedAccount.email : 'admin-anfa',
+        id: matchedAccount ? matchedAccount.email : 'admin-abdulraheem',
         email: cleanEmail,
-        name: matchedAccount ? matchedAccount.name : 'ANFA Store Administrator',
+        name: matchedAccount ? matchedAccount.name : 'Abdul Raheem (Master Admin)',
         role: (matchedAccount ? matchedAccount.role : 'super_admin') as any,
         avatar: matchedAccount ? matchedAccount.avatar : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
         token: sessionToken,

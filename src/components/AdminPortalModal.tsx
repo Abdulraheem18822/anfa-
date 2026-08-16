@@ -87,8 +87,8 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
   // Authentication State
   const [adminUser, setAdminUser] = useState<AdminUser | null>(getStoredAdminUser());
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!getStoredAdminToken());
-  const [loginEmail, setLoginEmail] = useState('anfa.store01@gmail.com');
-  const [loginPassword, setLoginPassword] = useState('admin@anfa2026');
+  const [loginEmail, setLoginEmail] = useState('abdulraheem18822@gmail.com');
+  const [loginPassword, setLoginPassword] = useState('Shifa@2907');
   const [rememberMe, setRememberMe] = useState(true);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -564,7 +564,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                       type="email"
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
-                      placeholder="anfa.store01@gmail.com"
+                      placeholder="abdulraheem18822@gmail.com"
                       required
                       className="w-full bg-neutral-950 border border-neutral-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400 transition"
                     />
@@ -624,19 +624,19 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
               <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-center space-y-1">
                 <p className="text-[11px] text-neutral-400">Master Credentials Authorized:</p>
                 <div className="flex items-center justify-center space-x-2 text-[11px] font-mono text-amber-400">
-                  <span>anfa.store01@gmail.com</span>
+                  <span>abdulraheem18822@gmail.com</span>
                   <span>•</span>
-                  <span>admin@anfa2026</span>
+                  <span>Shifa@2907</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
-                    setLoginEmail('anfa.store01@gmail.com');
-                    setLoginPassword('admin@anfa2026');
+                    setLoginEmail('abdulraheem18822@gmail.com');
+                    setLoginPassword('Shifa@2907');
                   }}
-                  className="text-[10px] text-neutral-400 hover:text-amber-400 underline pt-1"
+                  className="text-[10px] text-neutral-400 hover:text-amber-400 underline pt-1 cursor-pointer"
                 >
-                  Auto-fill demo credentials
+                  Auto-fill master credentials
                 </button>
               </div>
 
