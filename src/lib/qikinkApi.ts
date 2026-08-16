@@ -1,13 +1,26 @@
 import { Product, QikinkFulfillmentOrder, CustomDesignUpload, QikinkWebhookPayload } from '../types/store';
 
+async function safeParseJsonResponse<T>(res: Response, fallback: T): Promise<T> {
+  try {
+    const text = await res.text();
+    if (!text || !text.trim()) {
+      return fallback;
+    }
+    return JSON.parse(text) as T;
+  } catch (e) {
+    console.warn('qikinkApi safeParseJsonResponse fallback:', e);
+    return fallback;
+  }
+}
+
 /**
  * Fetch products from the backend API (Supabase backed)
  */
 export async function getBackendProducts(showAll: boolean = false): Promise<Product[]> {
   try {
     const res = await fetch(`/api/products?all=${showAll}`);
-    if (!res.ok) throw new Error('Failed to fetch products');
-    const json = await res.json();
+    if (!res.ok) return [];
+    const json = await safeParseJsonResponse<{ success?: boolean; products?: Product[] }>(res, {});
     return json.products || [];
   } catch (error) {
     console.warn('API getBackendProducts fallback to local:', error);
@@ -28,8 +41,8 @@ export async function updateProductDetails(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
-    if (!res.ok) throw new Error('Failed to update product');
-    const json = await res.json();
+    const json = await safeParseJsonResponse<{ success?: boolean; product?: Product; error?: string }>(res, {});
+    if (!res.ok || !json.success) throw new Error(json.error || 'Failed to update product');
     return { success: true, product: json.product };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Update failed' };
@@ -55,9 +68,9 @@ export async function simulateQikinkProductPush(params: {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
     });
-    const json = await res.json();
+    const json = await safeParseJsonResponse<{ success?: boolean; message?: string; product?: Product; error?: string }>(res, {});
     return {
-      success: json.success,
+      success: json.success ?? false,
       message: json.message,
       product: json.product,
       error: json.error,
@@ -103,9 +116,9 @@ export async function dispatchOrderToQikink(orderData: {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(orderData),
     });
-    const json = await res.json();
+    const json = await safeParseJsonResponse<{ success?: boolean; order?: QikinkFulfillmentOrder; message?: string; error?: string }>(res, {});
     return {
-      success: json.success,
+      success: json.success ?? false,
       order: json.order,
       message: json.message,
       error: json.error,
@@ -133,9 +146,9 @@ export async function uploadDesignToAccount(params: {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
     });
-    const json = await res.json();
+    const json = await safeParseJsonResponse<{ success?: boolean; design?: CustomDesignUpload; error?: string }>(res, {});
     return {
-      success: json.success,
+      success: json.success ?? false,
       design: json.design,
       error: json.error,
     };
@@ -152,7 +165,7 @@ export async function fetchAllOrders(customerId?: string): Promise<QikinkFulfill
     const url = customerId ? `/api/orders?customerId=${customerId}` : '/api/orders';
     const res = await fetch(url);
     if (!res.ok) return [];
-    const json = await res.json();
+    const json = await safeParseJsonResponse<{ success?: boolean; orders?: QikinkFulfillmentOrder[] }>(res, {});
     return json.orders || [];
   } catch {
     return [];
@@ -166,7 +179,7 @@ export async function fetchWebhookLogs(): Promise<Array<{ id: string; timestamp:
   try {
     const res = await fetch('/api/webhooks/logs');
     if (!res.ok) return [];
-    const json = await res.json();
+    const json = await safeParseJsonResponse<{ success?: boolean; logs?: Array<{ id: string; timestamp: string; event: string; payload: unknown; status: string }> }>(res, {});
     return json.logs || [];
   } catch {
     return [];

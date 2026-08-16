@@ -162,9 +162,12 @@ export default function App() {
     try {
       const res = await fetch('/api/products');
       if (res.ok) {
-        const json = await res.json();
-        if (json.success && Array.isArray(json.products) && json.products.length > 0) {
-          setCatalogProducts(json.products);
+        const text = await res.text();
+        if (text && text.trim()) {
+          const json = JSON.parse(text);
+          if (json.success && Array.isArray(json.products) && json.products.length > 0) {
+            setCatalogProducts(json.products);
+          }
         }
       }
     } catch {
