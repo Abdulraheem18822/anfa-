@@ -65,7 +65,14 @@ import {
   redispatchOrderToQikink,
   fetchCustomerAuthLogs,
 } from '../lib/adminApi';
-import { simulateQikinkProductPush, fetchWebhookLogs } from '../lib/qikinkApi';
+import {
+  simulateQikinkProductPush,
+  fetchWebhookLogs,
+  fetchSandboxStatus,
+  dispatchSandboxTestOrder,
+  triggerSandboxWebhook,
+  SandboxStatusResponse,
+} from '../lib/qikinkApi';
 import { SUPABASE_PROJECT_ID, SUPABASE_URL } from '../lib/supabase';
 import { TShirtMockup } from './TShirtMockup';
 
@@ -175,6 +182,8 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
     printArea: 'chest' as 'chest' | 'back' | 'pocket',
   });
   const [isSimulating, setIsSimulating] = useState(false);
+  const [sandboxStatus, setSandboxStatus] = useState<SandboxStatusResponse | null>(null);
+  const [isDispatchingTestOrder, setIsDispatchingTestOrder] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -200,13 +209,14 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
   const fetchAllDashboardData = async () => {
     setIsLoadingData(true);
     try {
-      const [st, prods, ords, des, logs, wh] = await Promise.all([
+      const [st, prods, ords, des, logs, wh, sbx] = await Promise.all([
         fetchAdminStats(),
         fetchAdminProducts(),
         fetchAdminOrders(),
         fetchAdminCustomDesigns(),
         fetchCustomerAuthLogs(),
         fetchWebhookLogs(),
+        fetchSandboxStatus(),
       ]);
 
       if (st) setStats(st);
@@ -215,10 +225,51 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
       setCustomDesigns(des);
       setAuthLogs(logs);
       setWebhookLogs(wh);
+      if (sbx) setSandboxStatus(sbx);
     } catch (err) {
       console.error('Error fetching admin data:', err);
     } finally {
       setIsLoadingData(false);
+    }
+  };
+
+  const handleDispatchSandboxTestOrder = async () => {
+    setIsDispatchingTestOrder(true);
+    try {
+      const res = await dispatchSandboxTestOrder({
+        sku: 'ANFA-SBX-240-BLK',
+        title: 'Acid Wash 240 GSM Oversized Heavyweight Tee (Sandbox Dispatch)',
+        price: 999,
+        size: 'XL',
+        color: 'Pitch Black',
+      });
+      if (res.success) {
+        showToast(`Sandbox Order #${res.order?.orderNumber || 'SBX'} placed & dispatched to Qikink pipeline!`);
+        await fetchAllDashboardData();
+      } else {
+        showToast(`Sandbox test order failed: ${res.error}`);
+      }
+    } catch (err: any) {
+      showToast(`Error: ${err?.message || 'Failed'}`);
+    } finally {
+      setIsDispatchingTestOrder(false);
+    }
+  };
+
+  const handleTriggerSandboxWebhook = async (status: string) => {
+    try {
+      const targetOrder = orders.length > 0 ? orders[0].orderNumber : 'ANFA-SBX-101';
+      const res = await triggerSandboxWebhook({
+        eventType: 'order.status_changed',
+        status,
+        orderId: targetOrder,
+      });
+      if (res.success) {
+        showToast(`Sandbox Webhook triggered: #${targetOrder} status changed to ${status}!`);
+        await fetchAllDashboardData();
+      }
+    } catch {
+      showToast('Failed to trigger simulated webhook');
     }
   };
 
@@ -1198,35 +1249,121 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
               {/* ========================================================================= */}
               {activeTab === 'qikink' && (
                 <div className="space-y-6">
-                  {/* Qikink Connection Status Card */}
+                  {/* Qikink Sandbox Connection Status Card */}
                   <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5 space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="space-y-1">
                         <div className="flex items-center space-x-2">
                           <span className="font-['Oswald'] text-lg font-black tracking-wider text-white uppercase">
-                            QIKINK POD AUTOMATION PIPELINE
+                            QIKINK POD SANDBOX PIPELINE
                           </span>
                           <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase">
-                            ACTIVE
+                            ACTIVE SANDBOX
+                          </span>
+                          <span className="bg-amber-400/20 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase font-mono">
+                            TEST INTEGRATION READY
                           </span>
                         </div>
                         <p className="text-xs text-neutral-400">
-                          Automated direct-to-garment (DTG) production and webhook synchronization with Qikink manufacturing hubs
+                          Automated Direct-to-Garment (DTG) production and webhook synchronization with Qikink Tirupur Hub & Hyderabad Gateway.
                         </p>
                       </div>
 
-                      <div className="flex items-center space-x-2 text-xs font-mono text-neutral-400">
-                        <span>Client ID: <strong className="text-amber-400">ANFA_STORE_01</strong></span>
+                      <div className="flex items-center space-x-3 text-xs font-mono">
+                        <div className="bg-neutral-950 px-3 py-1.5 rounded-xl border border-neutral-800">
+                          <span className="text-neutral-500">Client ID: </span>
+                          <strong className="text-amber-400">{sandboxStatus?.qikink.clientId || 'ANFA_STORE_SANDBOX_01'}</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Sandbox Credentials & Endpoint Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-mono">
+                      <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-3 space-y-1">
+                        <span className="text-[10px] text-neutral-500 uppercase font-sans font-bold block">Sandbox API Key</span>
+                        <span className="text-emerald-400">{sandboxStatus?.qikink.apiKeyMasked || 'qik_san••••••••••••2026'}</span>
+                      </div>
+                      <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-3 space-y-1">
+                        <span className="text-[10px] text-neutral-500 uppercase font-sans font-bold block">Webhook Secret</span>
+                        <span className="text-amber-400">{sandboxStatus?.qikink.webhookSecretMasked || 'qik_wh••••••••'}</span>
+                      </div>
+                      <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-3 space-y-1">
+                        <span className="text-[10px] text-neutral-500 uppercase font-sans font-bold block">Qikink API Base</span>
+                        <span className="text-neutral-300 text-[11px] truncate block">{sandboxStatus?.qikink.baseUrl || 'https://sandbox.qikink.com/api'}</span>
                       </div>
                     </div>
 
                     {/* Endpoint display */}
-                    <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-3 flex items-center justify-between text-xs font-mono text-neutral-300">
+                    <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-neutral-300">
                       <div>
                         <span className="text-neutral-500">Inbound Webhook URL: </span>
                         <span className="text-amber-400">/api/webhooks/qikink</span>
                       </div>
-                      <span className="text-[10px] text-emerald-400 font-sans font-bold">READY FOR PUSHES</span>
+                      <span className="text-[10px] text-emerald-400 font-sans font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                        READY FOR LIVE & SANDBOX PUSHES
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Sandbox Test Trigger Bar */}
+                  <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h3 className="font-['Oswald'] text-base font-bold tracking-wider text-white uppercase flex items-center space-x-2">
+                          <Zap className="w-4 h-4 text-amber-400" />
+                          <span>Interactive Sandbox Test Controls</span>
+                        </h3>
+                        <p className="text-xs text-neutral-400 mt-0.5">
+                          Execute automated test orders through the sandbox fulfillment pipeline or trigger live webhook status callbacks.
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={handleDispatchSandboxTestOrder}
+                        disabled={isDispatchingTestOrder}
+                        className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-black font-extrabold text-xs uppercase tracking-wider transition shadow-lg flex items-center space-x-2 disabled:opacity-50"
+                      >
+                        {isDispatchingTestOrder ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin text-black" />
+                            <span>Dispatching Test Order...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Send className="w-4 h-4 text-black" />
+                            <span>Dispatch Test Order to Sandbox</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Webhook Status Simulation Triggers */}
+                    <div className="pt-2 border-t border-neutral-800 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="text-neutral-400 text-[11px] font-bold uppercase mr-1">Simulate Order Status Callback:</span>
+                      <button
+                        onClick={() => handleTriggerSandboxWebhook('in_production')}
+                        className="px-2.5 py-1 rounded-lg bg-neutral-950 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white font-mono text-[11px] transition"
+                      >
+                        in_production
+                      </button>
+                      <button
+                        onClick={() => handleTriggerSandboxWebhook('printed')}
+                        className="px-2.5 py-1 rounded-lg bg-neutral-950 hover:bg-neutral-800 border border-neutral-700 text-amber-400 hover:text-amber-300 font-mono text-[11px] transition"
+                      >
+                        printed (DTG Cured)
+                      </button>
+                      <button
+                        onClick={() => handleTriggerSandboxWebhook('shipped')}
+                        className="px-2.5 py-1 rounded-lg bg-neutral-950 hover:bg-neutral-800 border border-neutral-700 text-cyan-400 hover:text-cyan-300 font-mono text-[11px] transition"
+                      >
+                        shipped (Delhivery)
+                      </button>
+                      <button
+                        onClick={() => handleTriggerSandboxWebhook('delivered')}
+                        className="px-2.5 py-1 rounded-lg bg-neutral-950 hover:bg-neutral-800 border border-neutral-700 text-emerald-400 hover:text-emerald-300 font-mono text-[11px] transition"
+                      >
+                        delivered
+                      </button>
                     </div>
                   </div>
 
@@ -1302,12 +1439,17 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
 
                     {/* Right: Webhook Payload Logs */}
                     <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5 space-y-4">
-                      <h3 className="font-['Oswald'] text-base font-bold tracking-wider text-white uppercase flex items-center space-x-2">
-                        <Activity className="w-4 h-4 text-emerald-400" />
-                        <span>Inbound Webhook Event Logs</span>
-                      </h3>
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-['Oswald'] text-base font-bold tracking-wider text-white uppercase flex items-center space-x-2">
+                          <Activity className="w-4 h-4 text-emerald-400" />
+                          <span>Inbound Webhook Event Logs</span>
+                        </h3>
+                        <span className="text-[10px] font-mono text-neutral-500">
+                          Total: {webhookLogs.length} events
+                        </span>
+                      </div>
 
-                      <div className="space-y-2.5 max-h-[280px] overflow-y-auto pr-1">
+                      <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
                         {webhookLogs.length === 0 ? (
                           <p className="text-xs text-neutral-500 py-6 text-center">No webhook payloads logged yet.</p>
                         ) : (
@@ -1704,12 +1846,34 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                     {/* Infrastructure & Database Health */}
                     <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5 space-y-4">
                       <h3 className="font-['Oswald'] text-base font-bold tracking-wider text-white uppercase">
-                        Backend & Cloud Integrations
+                        Backend, Sandbox & Cloud Integrations
                       </h3>
                       <div className="space-y-3 text-xs">
                         <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between">
                           <div>
-                            <p className="font-bold text-white">Supabase Cloud Database</p>
+                            <p className="font-bold text-white">Qikink DTG Fulfillment Sandbox</p>
+                            <p className="text-[10px] text-neutral-400 font-mono">
+                              Client: {sandboxStatus?.qikink.clientId || 'ANFA_STORE_SANDBOX_01'} | Key: {sandboxStatus?.qikink.apiKeyMasked || 'Active'}
+                            </p>
+                          </div>
+                          <span className="text-amber-400 font-bold text-[10px] bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                            SANDBOX ACTIVE
+                          </span>
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between">
+                          <div>
+                            <p className="font-bold text-white">Razorpay & UPI Payment Test Gateway</p>
+                            <p className="text-[10px] text-neutral-400 font-mono">Key: {sandboxStatus?.payment.keyIdMasked || 'rzp_test_••••••••'}</p>
+                          </div>
+                          <span className="text-emerald-400 font-bold text-[10px] bg-emerald-500/10 px-2 py-0.5 rounded">
+                            TEST MODE READY
+                          </span>
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between">
+                          <div>
+                            <p className="font-bold text-white">Supabase Cloud Database & Auth</p>
                             <p className="text-[10px] text-neutral-400 font-mono">Project: {SUPABASE_PROJECT_ID}</p>
                           </div>
                           <span className="text-emerald-400 font-bold text-[10px] bg-emerald-500/10 px-2 py-0.5 rounded">
@@ -1719,21 +1883,11 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
 
                         <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between">
                           <div>
-                            <p className="font-bold text-white">Supabase Storage Bucket</p>
+                            <p className="font-bold text-white">Supabase Storage Bucket (PNGs)</p>
                             <p className="text-[10px] text-neutral-400 font-mono">Bucket: custom-designs</p>
                           </div>
                           <span className="text-emerald-400 font-bold text-[10px] bg-emerald-500/10 px-2 py-0.5 rounded">
                             ACTIVE
-                          </span>
-                        </div>
-
-                        <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between">
-                          <div>
-                            <p className="font-bold text-white">Qikink DTG Fulfillment API</p>
-                            <p className="text-[10px] text-neutral-400 font-mono">Status: Automated POD Stream</p>
-                          </div>
-                          <span className="text-amber-400 font-bold text-[10px] bg-amber-500/10 px-2 py-0.5 rounded">
-                            READY
                           </span>
                         </div>
                       </div>

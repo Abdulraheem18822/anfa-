@@ -185,3 +185,105 @@ export async function fetchWebhookLogs(): Promise<Array<{ id: string; timestamp:
     return [];
   }
 }
+
+export interface SandboxStatusResponse {
+  success: boolean;
+  environment: string;
+  qikink: {
+    status: string;
+    clientId: string;
+    apiKeyMasked: string;
+    webhookSecretMasked: string;
+    baseUrl: string;
+    webhookEndpointUrl: string;
+    mode: string;
+  };
+  payment: {
+    status: string;
+    gateway: string;
+    keyIdMasked: string;
+    supportedGateways: string[];
+  };
+  logistics: {
+    status: string;
+    provider: string;
+    shiprocketEmail: string;
+    defaultCourier: string;
+  };
+  database: {
+    provider: string;
+    projectId: string;
+    url: string;
+    status: string;
+  };
+  verifiedAt: string;
+}
+
+/**
+ * Fetch sandbox configuration status
+ */
+export async function fetchSandboxStatus(): Promise<SandboxStatusResponse | null> {
+  try {
+    const res = await fetch('/api/sandbox/status');
+    if (!res.ok) return null;
+    const json = await safeParseJsonResponse<SandboxStatusResponse>(res, {} as SandboxStatusResponse);
+    return json.success ? json : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Trigger an automated test order in sandbox mode
+ */
+export async function dispatchSandboxTestOrder(params?: {
+  sku?: string;
+  title?: string;
+  price?: number;
+  size?: string;
+  color?: string;
+}): Promise<{ success: boolean; message?: string; order?: QikinkFulfillmentOrder; error?: string }> {
+  try {
+    const res = await fetch('/api/sandbox/test-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params || {}),
+    });
+    const json = await safeParseJsonResponse<{ success?: boolean; message?: string; order?: QikinkFulfillmentOrder; error?: string }>(res, {});
+    return {
+      success: json.success ?? false,
+      message: json.message,
+      order: json.order,
+      error: json.error,
+    };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Sandbox test order dispatch failed' };
+  }
+}
+
+/**
+ * Simulate a Qikink sandbox webhook event
+ */
+export async function triggerSandboxWebhook(params: {
+  eventType?: string;
+  orderId?: string;
+  status?: string;
+  trackingNumber?: string;
+}): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    const res = await fetch('/api/sandbox/test-webhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    const json = await safeParseJsonResponse<{ success?: boolean; message?: string; error?: string }>(res, {});
+    return {
+      success: json.success ?? false,
+      message: json.message,
+      error: json.error,
+    };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Webhook trigger failed' };
+  }
+}
+

@@ -17,6 +17,7 @@ import {
   EyeOff,
   RefreshCw,
   Send,
+  Zap,
   Truck,
   FileImage,
   ShieldCheck,
@@ -30,6 +31,10 @@ import {
   simulateQikinkProductPush,
   fetchAllOrders,
   fetchWebhookLogs,
+  fetchSandboxStatus,
+  dispatchSandboxTestOrder,
+  triggerSandboxWebhook,
+  SandboxStatusResponse,
 } from '../lib/qikinkApi';
 import { SUPABASE_PROJECT_ID, SUPABASE_URL, CUSTOM_DESIGNS_BUCKET } from '../lib/supabase';
 
@@ -46,10 +51,12 @@ export const QikinkManagerModal: React.FC<QikinkManagerModalProps> = ({
   settings,
   onRefreshCatalog,
 }) => {
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'webhook' | 'storage'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'webhook' | 'storage' | 'sandbox'>('products');
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<QikinkFulfillmentOrder[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
+  const [sandboxStatus, setSandboxStatus] = useState<SandboxStatusResponse | null>(null);
+  const [isDispatchingTestOrder, setIsDispatchingTestOrder] = useState(false);
   const [loading, setLoading] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -86,18 +93,60 @@ export const QikinkManagerModal: React.FC<QikinkManagerModalProps> = ({
   const loadData = async () => {
     setLoading(true);
     try {
-      const [prods, ords, lg] = await Promise.all([
+      const [prods, ords, lg, sbx] = await Promise.all([
         getBackendProducts(true),
         fetchAllOrders(),
         fetchWebhookLogs(),
+        fetchSandboxStatus(),
       ]);
       setProducts(prods);
       setOrders(ords);
       setLogs(lg);
+      if (sbx) setSandboxStatus(sbx);
     } catch {
       // ignore
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDispatchSandboxOrder = async () => {
+    setIsDispatchingTestOrder(true);
+    try {
+      const res = await dispatchSandboxTestOrder({
+        sku: 'ANFA-SBX-240-BLK',
+        title: 'Acid Wash 240 GSM Oversized Heavyweight Tee (Sandbox Dispatch)',
+        price: 999,
+        size: 'XL',
+        color: 'Pitch Black',
+      });
+      if (res.success) {
+        showToast(`Sandbox Order #${res.order?.orderNumber || 'SBX'} placed & dispatched to Qikink pipeline!`);
+        await loadData();
+      } else {
+        showToast(`Sandbox test order failed: ${res.error}`);
+      }
+    } catch (err: any) {
+      showToast(`Error: ${err?.message || 'Failed'}`);
+    } finally {
+      setIsDispatchingTestOrder(false);
+    }
+  };
+
+  const handleSimulateWebhookStatus = async (status: string) => {
+    try {
+      const targetOrder = orders.length > 0 ? orders[0].orderNumber : 'ANFA-SBX-101';
+      const res = await triggerSandboxWebhook({
+        eventType: 'order.status_changed',
+        status,
+        orderId: targetOrder,
+      });
+      if (res.success) {
+        showToast(`Sandbox Webhook triggered: #${targetOrder} status changed to ${status}!`);
+        await loadData();
+      }
+    } catch {
+      showToast('Failed to trigger simulated webhook');
     }
   };
 
@@ -300,6 +349,18 @@ export const QikinkManagerModal: React.FC<QikinkManagerModalProps> = ({
           >
             <FileImage className="w-4 h-4 text-amber-500" />
             <span>PNG Storage Bucket ({CUSTOM_DESIGNS_BUCKET})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('sandbox')}
+            className={`py-3 px-4 font-['Oswald'] text-xs uppercase tracking-wider font-bold transition flex items-center space-x-2 border-b-2 whitespace-nowrap ${
+              activeTab === 'sandbox'
+                ? 'border-amber-500 text-neutral-900 bg-white'
+                : 'border-transparent text-neutral-500 hover:text-neutral-900'
+            }`}
+          >
+            <Zap className="w-4 h-4 text-amber-500" />
+            <span>Sandbox & Test Integration</span>
           </button>
         </div>
 
@@ -738,6 +799,118 @@ export const QikinkManagerModal: React.FC<QikinkManagerModalProps> = ({
                     <Database className="w-4 h-4 text-blue-600 mb-1" />
                     <strong className="block text-neutral-900">Customer Link</strong>
                     <span className="text-[11px] text-neutral-500">Saved under `customers/:id/`</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ================= TAB 5: SANDBOX & TEST INTEGRATION ================= */}
+          {activeTab === 'sandbox' && (
+            <div className="space-y-4">
+              <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center space-x-2">
+                    <Zap className="w-5 h-5 text-amber-600" />
+                    <h3 className="font-['Oswald'] font-bold text-base uppercase text-neutral-900">
+                      Sandbox Credentials & Automated Test Integration
+                    </h3>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 uppercase font-mono">
+                      SANDBOX MODE: {sandboxStatus?.environment.toUpperCase() || 'SANDBOX'}
+                    </span>
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase font-mono">
+                      PIPELINE READY
+                    </span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-neutral-600 leading-relaxed">
+                  The backend has loaded and applied sandbox credentials for Qikink DTG Production, Razorpay Test Payments, and Delhivery Logistics. Use the controls below to test order dispatches and verify real-time status callbacks.
+                </p>
+
+                {/* Credentials Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                  <div className="bg-neutral-50 p-3.5 rounded-xl border border-neutral-200 space-y-1 font-mono">
+                    <span className="text-[10px] font-sans font-bold text-neutral-500 uppercase block">Qikink Sandbox Client</span>
+                    <p className="font-bold text-neutral-900 text-xs">{sandboxStatus?.qikink.clientId || 'ANFA_STORE_SANDBOX_01'}</p>
+                    <p className="text-[10px] text-neutral-500">{sandboxStatus?.qikink.apiKeyMasked || 'qik_san••••••••••••2026'}</p>
+                  </div>
+
+                  <div className="bg-neutral-50 p-3.5 rounded-xl border border-neutral-200 space-y-1 font-mono">
+                    <span className="text-[10px] font-sans font-bold text-neutral-500 uppercase block">Payment Gateway (Test)</span>
+                    <p className="font-bold text-neutral-900 text-xs">{sandboxStatus?.payment.provider || 'Razorpay Sandbox'}</p>
+                    <p className="text-[10px] text-neutral-500">{sandboxStatus?.payment.keyIdMasked || 'rzp_test_••••••••'}</p>
+                  </div>
+
+                  <div className="bg-neutral-50 p-3.5 rounded-xl border border-neutral-200 space-y-1 font-mono">
+                    <span className="text-[10px] font-sans font-bold text-neutral-500 uppercase block">Logistics Partner</span>
+                    <p className="font-bold text-neutral-900 text-xs">{sandboxStatus?.logistics.partner || 'Delhivery Express Test'}</p>
+                    <p className="text-[10px] text-neutral-500">Mode: {sandboxStatus?.logistics.mode || 'Sandbox'}</p>
+                  </div>
+                </div>
+
+                {/* Action Trigger Card */}
+                <div className="bg-neutral-900 text-white p-4 rounded-xl space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h4 className="font-['Oswald'] font-bold text-sm uppercase text-amber-400">
+                        Dispatch Automated Test Order
+                      </h4>
+                      <p className="text-[11px] text-neutral-400">
+                        Generates a sample 240 GSM Oversized Heavyweight T-Shirt order and routes it through Qikink's sandbox queue.
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={handleDispatchSandboxOrder}
+                      disabled={isDispatchingTestOrder}
+                      className="px-4 py-2 bg-amber-400 hover:bg-amber-500 text-black font-extrabold text-xs uppercase tracking-wider rounded-lg transition flex items-center space-x-2 disabled:opacity-50"
+                    >
+                      {isDispatchingTestOrder ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-black" />
+                          <span>Dispatching...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-3.5 h-3.5 text-black" />
+                          <span>Run Sandbox Test Order</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Webhook Triggers */}
+                  <div className="pt-3 border-t border-neutral-800 flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-bold text-neutral-400 uppercase mr-1 font-mono">
+                      Trigger Simulated Webhook Callback:
+                    </span>
+                    <button
+                      onClick={() => handleSimulateWebhookStatus('in_production')}
+                      className="px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-[10px] font-mono transition"
+                    >
+                      in_production
+                    </button>
+                    <button
+                      onClick={() => handleSimulateWebhookStatus('printed')}
+                      className="px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-amber-300 text-[10px] font-mono transition"
+                    >
+                      printed
+                    </button>
+                    <button
+                      onClick={() => handleSimulateWebhookStatus('shipped')}
+                      className="px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-cyan-300 text-[10px] font-mono transition"
+                    >
+                      shipped
+                    </button>
+                    <button
+                      onClick={() => handleSimulateWebhookStatus('delivered')}
+                      className="px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-emerald-300 text-[10px] font-mono transition"
+                    >
+                      delivered
+                    </button>
                   </div>
                 </div>
               </div>
