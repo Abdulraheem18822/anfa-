@@ -198,6 +198,26 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
         await uploadCustomDesignToSupabase(selectedFileObj, customerId, customerEmail);
       }
 
+      // Also persist record to backend custom-designs API
+      try {
+        await fetch('/api/custom-designs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customerId,
+            customerEmail,
+            fileName: fileName || 'custom-design.png',
+            fileUrl: uploadedImage,
+            widthPx: imageMeta?.width || 2400,
+            heightPx: imageMeta?.height || 3000,
+            isTransparentPng: imageMeta?.isTransparent ?? true,
+            dpiEstimated: imageMeta?.dpi || 300,
+          }),
+        });
+      } catch (errApi) {
+        console.warn('Backend custom-designs save notice:', errApi);
+      }
+
       // 2. Automatically dispatch order to Qikink POD manufacturing queue
       const qikinkRes = await dispatchOrderToQikink({
         orderNumber: generatedRef,

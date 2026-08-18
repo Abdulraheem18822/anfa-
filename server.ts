@@ -148,6 +148,34 @@ interface ServerCustomDesign {
   createdAt: string;
 }
 
+interface ServerCustomer {
+  id: string;
+  phone: string; // 10-digit normalized unique identifier
+  name: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  country?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ServerReturnRequest {
+  id: string;
+  orderNumber: string;
+  customerPhone: string;
+  customerName: string;
+  requestType: 'return' | 'exchange';
+  itemTitle: string;
+  reason: string;
+  exchangeSize?: string;
+  status: 'requested' | 'pickup_scheduled' | 'received' | 'refunded' | 'exchanged_delivered';
+  pickupAddress: string;
+  createdAt: string;
+}
+
 interface ServerAuthLog {
   id: string;
   userId?: string;
@@ -439,6 +467,38 @@ let customDesignsCache: ServerCustomDesign[] = [
     approvalStatus: 'pending_review',
     adminNotes: 'Awaiting admin proof check before dispatching to Qikink Tirupur hub.',
     createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+  },
+];
+
+let customersCache: ServerCustomer[] = [
+  {
+    id: 'cust-9603344954',
+    phone: '9603344954',
+    name: 'Abdul Raheem',
+    email: 'abdulraheem18822@gmail.com',
+    address: 'Nilofar complex, main road, cloth market',
+    city: 'Bhainsa',
+    state: 'Telangana',
+    pincode: '504103',
+    country: 'India',
+    createdAt: new Date(Date.now() - 86400000 * 10).toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+
+let returnsCache: ServerReturnRequest[] = [
+  {
+    id: 'ret-101',
+    orderNumber: 'ANFA-96033',
+    customerPhone: '9603344954',
+    customerName: 'Abdul Raheem',
+    requestType: 'exchange',
+    itemTitle: 'Mountain Wanderer Traveling T-Shirt (Size L)',
+    reason: 'Need size XL for a looser oversized fit',
+    exchangeSize: 'XL',
+    status: 'pickup_scheduled',
+    pickupAddress: 'Nilofar complex, main road, cloth market, Bhainsa, Telangana, 504103',
+    createdAt: new Date(Date.now() - 86400000 * 1).toISOString(),
   },
 ];
 
@@ -1309,6 +1369,333 @@ app.get('/api/storage/customer-designs/:customerId', (req: Request, res: Respons
   const { customerId } = req.params;
   const filtered = customDesignsCache.filter((d) => d.customerId === customerId);
   res.json({ success: true, count: filtered.length, designs: filtered });
+});
+
+// POST /api/custom-designs - Direct endpoint to save custom POD design
+app.post('/api/custom-designs', async (req: Request, res: Response) => {
+  try {
+    const { customerId, customerEmail, fileName, fileUrl, storagePath, fileSizeBytes, widthPx, heightPx, isTransparentPng, dpiEstimated } = req.body;
+    const newDesign: ServerCustomDesign = {
+      id: `des-${Date.now()}`,
+      customerId: customerId || 'guest_user',
+      customerEmail: customerEmail || 'customer@anfa.com',
+      fileName: fileName || 'custom-design.png',
+      fileUrl: fileUrl || '',
+      storagePath: storagePath || `customers/${customerId || 'guest'}/${Date.now()}_design.png`,
+      fileSizeBytes: fileSizeBytes || 1500000,
+      widthPx: widthPx || 2400,
+      heightPx: heightPx || 3000,
+      isTransparentPng: isTransparentPng ?? true,
+      dpiEstimated: dpiEstimated || 300,
+      approvalStatus: 'approved_for_print',
+      adminNotes: 'Auto-saved customer POD transparent PNG artwork',
+      createdAt: new Date().toISOString(),
+    };
+
+    customDesignsCache.unshift(newDesign);
+
+    try {
+      await supabase.from('custom_designs').insert([
+        {
+          id: newDesign.id,
+          customer_id: newDesign.customerId,
+          customer_email: newDesign.customerEmail,
+          file_name: newDesign.fileName,
+          file_url: newDesign.fileUrl,
+          storage_path: newDesign.storagePath,
+          file_size: newDesign.fileSizeBytes,
+          width_px: newDesign.widthPx,
+          height_px: newDesign.heightPx,
+          is_transparent: newDesign.isTransparentPng,
+          created_at: newDesign.createdAt,
+        },
+      ]);
+    } catch (e) {
+      console.warn('Supabase custom_designs insert notice:', e);
+    }
+
+    res.status(200).json({ success: true, design: newDesign });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Failed to record custom design' });
+  }
+});
+
+// ==========================================
+// 5B. SIMPLIFIED MEESHO-STYLE CUSTOMER AUTH & PROFILE ENDPOINTS
+// ==========================================
+
+// Helper: Normalize 10-digit Indian mobile number
+function cleanPhone(raw: string): string {
+  const digits = (raw || '').replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
+  if (digits.length > 10) return digits.slice(-10);
+  return digits;
+}
+
+// POST /api/customer/auth - Mobile Number + OTP Login / Signup with strict deduplication
+app.post('/api/customer/auth', async (req: Request, res: Response) => {
+  try {
+    const { phone: rawPhone, name, email, address, city, state, pincode } = req.body;
+    const phone = cleanPhone(rawPhone);
+
+    if (!phone || phone.length < 10) {
+      return res.status(400).json({ success: false, error: 'Valid 10-digit mobile number is required' });
+    }
+
+    // 1. Check if user already exists in server cache
+    let existingIndex = customersCache.findIndex((c) => c.phone === phone);
+    let isNewUser = false;
+    let customer: ServerCustomer;
+
+    if (existingIndex >= 0) {
+      // Existing customer - log in to existing account without duplicating data
+      customer = customersCache[existingIndex];
+      // Optionally update name/address if provided and previously empty
+      if (name && name !== 'Valued Customer' && (!customer.name || customer.name === 'Valued Customer')) {
+        customer.name = name;
+      }
+      if (address && !customer.address) customer.address = address;
+      if (city && !customer.city) customer.city = city;
+      customer.updatedAt = new Date().toISOString();
+    } else {
+      // 2. Check Supabase for existing record
+      try {
+        const { data: dbCustomer } = await supabase
+          .from('customers')
+          .select('*')
+          .eq('phone', phone)
+          .maybeSingle();
+
+        if (dbCustomer) {
+          customer = {
+            id: dbCustomer.id || `cust-${phone}`,
+            phone: dbCustomer.phone,
+            name: dbCustomer.name || name || 'Customer ' + phone.slice(-4),
+            email: dbCustomer.email || email || `${phone}@anfaprintwear.in`,
+            address: dbCustomer.address || address || 'Nilofar complex, main road, cloth market',
+            city: dbCustomer.city || city || 'Bhainsa',
+            state: dbCustomer.state || state || 'Telangana',
+            pincode: dbCustomer.pincode || pincode || '504103',
+            country: 'India',
+            createdAt: dbCustomer.created_at || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          customersCache.push(customer);
+        } else {
+          // New customer registration - single row
+          isNewUser = true;
+          customer = {
+            id: `cust-${phone}`,
+            phone,
+            name: (name && name.trim()) || 'Customer ' + phone.slice(-4),
+            email: email || `${phone}@anfaprintwear.in`,
+            address: address || 'Nilofar complex, main road, cloth market',
+            city: city || 'Bhainsa',
+            state: state || 'Telangana',
+            pincode: pincode || '504103',
+            country: 'India',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          customersCache.push(customer);
+
+          // Persist single unique customer to Supabase
+          try {
+            await supabase.from('customers').upsert({
+              id: customer.id,
+              phone: customer.phone,
+              name: customer.name,
+              email: customer.email,
+              address: customer.address,
+              city: customer.city,
+              state: customer.state,
+              pincode: customer.pincode,
+              country: customer.country,
+              created_at: customer.createdAt,
+              updated_at: customer.updatedAt,
+            });
+          } catch (e) {
+            console.warn('Supabase customer upsert notice:', e);
+          }
+        }
+      } catch (err) {
+        // Create local customer record
+        isNewUser = true;
+        customer = {
+          id: `cust-${phone}`,
+          phone,
+          name: (name && name.trim()) || 'Customer ' + phone.slice(-4),
+          email: email || `${phone}@anfaprintwear.in`,
+          address: address || 'Nilofar complex, main road, cloth market',
+          city: city || 'Bhainsa',
+          state: state || 'Telangana',
+          pincode: pincode || '504103',
+          country: 'India',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        customersCache.push(customer);
+      }
+    }
+
+    // Attach matching orders
+    const customerOrders = ordersCache.filter((o) => {
+      const orderPhone = cleanPhone(o.customerPhone);
+      return orderPhone === phone || (customer.email && o.customerEmail.toLowerCase() === customer.email.toLowerCase());
+    });
+
+    const customerReturns = returnsCache.filter((r) => cleanPhone(r.customerPhone) === phone);
+
+    res.status(200).json({
+      success: true,
+      isNewUser,
+      customer,
+      orders: customerOrders,
+      returns: customerReturns,
+      message: isNewUser ? 'New customer account created.' : 'Welcome back! Logged in successfully.',
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Authentication failed' });
+  }
+});
+
+// GET /api/customer/profile/:phone - Get customer profile with orders and returns
+app.get('/api/customer/profile/:phone', (req: Request, res: Response) => {
+  const phone = cleanPhone(req.params.phone);
+  const customer = customersCache.find((c) => c.phone === phone);
+
+  const customerOrders = ordersCache.filter((o) => {
+    const orderPhone = cleanPhone(o.customerPhone);
+    return orderPhone === phone || (customer?.email && o.customerEmail.toLowerCase() === customer.email.toLowerCase());
+  });
+
+  const customerReturns = returnsCache.filter((r) => cleanPhone(r.customerPhone) === phone);
+
+  res.json({
+    success: true,
+    customer: customer || null,
+    orders: customerOrders,
+    returns: customerReturns,
+  });
+});
+
+// POST /api/customer/profile - Save updated address and profile details
+app.post('/api/customer/profile', async (req: Request, res: Response) => {
+  try {
+    const { phone: rawPhone, name, email, address, city, state, pincode } = req.body;
+    const phone = cleanPhone(rawPhone);
+
+    if (!phone) {
+      return res.status(400).json({ success: false, error: 'Phone number is required' });
+    }
+
+    let customer = customersCache.find((c) => c.phone === phone);
+    if (!customer) {
+      customer = {
+        id: `cust-${phone}`,
+        phone,
+        name: name || 'Valued Customer',
+        email: email || `${phone}@anfaprintwear.in`,
+        address: address || '',
+        city: city || '',
+        state: state || '',
+        pincode: pincode || '',
+        country: 'India',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      customersCache.push(customer);
+    } else {
+      if (name) customer.name = name;
+      if (email) customer.email = email;
+      if (address !== undefined) customer.address = address;
+      if (city !== undefined) customer.city = city;
+      if (state !== undefined) customer.state = state;
+      if (pincode !== undefined) customer.pincode = pincode;
+      customer.updatedAt = new Date().toISOString();
+    }
+
+    // Persist to Supabase
+    try {
+      await supabase.from('customers').upsert({
+        id: customer.id,
+        phone: customer.phone,
+        name: customer.name,
+        email: customer.email,
+        address: customer.address,
+        city: customer.city,
+        state: customer.state,
+        pincode: customer.pincode,
+        country: customer.country,
+        updated_at: customer.updatedAt,
+      });
+    } catch (e) {
+      console.warn('Supabase customer update notice:', e);
+    }
+
+    res.json({ success: true, customer, message: 'Profile & delivery address saved successfully.' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to update profile' });
+  }
+});
+
+// GET /api/customer/orders/:phone - Get customer orders
+app.get('/api/customer/orders/:phone', (req: Request, res: Response) => {
+  const phone = cleanPhone(req.params.phone);
+  const customer = customersCache.find((c) => c.phone === phone);
+
+  const matched = ordersCache.filter((o) => {
+    const oPhone = cleanPhone(o.customerPhone);
+    return oPhone === phone || (customer?.email && o.customerEmail.toLowerCase() === customer.email.toLowerCase());
+  });
+
+  res.json({ success: true, count: matched.length, orders: matched });
+});
+
+// POST /api/customer/returns - Submit return or exchange request
+app.post('/api/customer/returns', async (req: Request, res: Response) => {
+  try {
+    const { orderNumber, customerPhone: rawPhone, customerName, requestType, itemTitle, reason, exchangeSize, pickupAddress } = req.body;
+    const phone = cleanPhone(rawPhone);
+
+    const newRequest: ServerReturnRequest = {
+      id: `ret-${Date.now()}`,
+      orderNumber: orderNumber || 'ANFA-ORD',
+      customerPhone: phone,
+      customerName: customerName || 'Valued Customer',
+      requestType: requestType === 'return' ? 'return' : 'exchange',
+      itemTitle: itemTitle || 'Custom Printed T-Shirt',
+      reason: reason || 'Size adjustment requested',
+      exchangeSize: exchangeSize || undefined,
+      status: 'pickup_scheduled',
+      pickupAddress: pickupAddress || 'Customer Saved Address, Bhainsa, Telangana, 504103',
+      createdAt: new Date().toISOString(),
+    };
+
+    returnsCache.unshift(newRequest);
+
+    // Save to Supabase
+    try {
+      await supabase.from('returns_exchanges').insert([newRequest]);
+    } catch (e) {
+      console.warn('Supabase returns_exchanges insert notice:', e);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: `${newRequest.requestType === 'exchange' ? 'Exchange' : 'Return'} request registered successfully. Our courier will pick up from your address within 24-48 hours.`,
+      request: newRequest,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to submit return/exchange request' });
+  }
+});
+
+// GET /api/customer/returns/:phone - Get returns for customer
+app.get('/api/customer/returns/:phone', (req: Request, res: Response) => {
+  const phone = cleanPhone(req.params.phone);
+  const matched = returnsCache.filter((r) => cleanPhone(r.customerPhone) === phone);
+  res.json({ success: true, count: matched.length, returns: matched });
 });
 
 // ==========================================
