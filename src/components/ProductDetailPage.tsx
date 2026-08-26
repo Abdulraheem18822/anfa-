@@ -211,6 +211,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                 shirtColor={selectedColor.hex}
                 graphicType={product.graphicType}
                 graphicUrl={product.graphicUrl}
+                printDimension={product.printDimension}
                 isGlowInDark={product.isGlowInDark}
                 showShadow={true}
                 className="w-full h-full drop-shadow-2xl transition-all duration-300"
@@ -228,8 +229,12 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                   Colorway: {selectedColor.name}
                 </span>
               </div>
-              <span className="text-[11px] text-neutral-400 font-medium">
-                300 DPI Direct-to-Garment Print
+              <span className="text-[11px] text-neutral-500 font-medium">
+                {product.printDimension === '8x11'
+                  ? '8" × 11" Chest Print (300 DPI)'
+                  : product.printDimension === '11x18'
+                  ? '11" × 18" Full Front Print (300 DPI)'
+                  : '11" × 16" Oversized Print (300 DPI)'}
               </span>
             </div>
           </div>

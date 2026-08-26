@@ -13,6 +13,7 @@ interface TShirtMockupProps {
   customText?: string;
   customFont?: string;
   glowActive?: boolean;
+  printDimension?: '8x11' | '11x16' | '11x18' | string;
 }
 
 export const TShirtMockup: React.FC<TShirtMockupProps> = ({
@@ -27,7 +28,32 @@ export const TShirtMockup: React.FC<TShirtMockupProps> = ({
   scale = 1,
   customText,
   customFont,
+  printDimension = '11x16',
 }) => {
+  // Compute graphic container sizing based on print dimension
+  const getDimensionStyles = () => {
+    switch (printDimension) {
+      case '8x11':
+        return {
+          containerClass: 'w-[44%] max-h-[50%] -translate-y-2',
+          imageSize: Math.round(150 * scale),
+        };
+      case '11x18':
+        return {
+          containerClass: 'w-[62%] max-h-[76%] translate-y-3',
+          imageSize: Math.round(220 * scale),
+        };
+      case '11x16':
+      default:
+        return {
+          containerClass: 'w-[54%] max-h-[64%] translate-y-0.5',
+          imageSize: Math.round(185 * scale),
+        };
+    }
+  };
+
+  const dimStyle = getDimensionStyles();
+
   // SVG Graphic Renderer based on graphicType or uploaded graphicUrl
   const renderGraphicContent = () => {
     if (graphicUrl) {
@@ -35,8 +61,8 @@ export const TShirtMockup: React.FC<TShirtMockupProps> = ({
         <div
           className="flex items-center justify-center transition-all duration-300"
           style={{
-            width: `${Math.round(180 * scale)}px`,
-            height: `${Math.round(180 * scale)}px`,
+            width: `${dimStyle.imageSize}px`,
+            height: `${dimStyle.imageSize}px`,
             maxWidth: '100%',
             maxHeight: '100%',
           }}
@@ -497,8 +523,8 @@ export const TShirtMockup: React.FC<TShirtMockupProps> = ({
         </svg>
 
         {/* DTG Printed Graphic Overlay Area (Centered on Chest) */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none pt-4">
-          <div className="w-[52%] max-h-[58%] flex items-center justify-center overflow-hidden">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none pt-3">
+          <div className={`${dimStyle.containerClass} flex items-center justify-center overflow-hidden transition-all duration-300`}>
             {renderGraphicContent()}
           </div>
         </div>

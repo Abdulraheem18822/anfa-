@@ -158,7 +158,10 @@ export default function App() {
   // Dynamic Catalog State (Synced with Backend / Admin edits)
   const [catalogProducts, setCatalogProducts] = useState<Product[]>(MOCK_PRODUCTS);
 
-  const refreshCatalog = async () => {
+  const refreshCatalog = async (directProducts?: Product[]) => {
+    if (directProducts && directProducts.length > 0) {
+      setCatalogProducts(directProducts.filter((p) => p.isLive !== false));
+    }
     try {
       const res = await fetch('/api/products');
       if (res.ok) {

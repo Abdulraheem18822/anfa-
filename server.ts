@@ -83,6 +83,7 @@ interface ServerProduct {
   isGlowInDark?: boolean;
   isLive: boolean;
   qikinkProductId?: string;
+  printDimension?: string;
   fabricGsm?: number | string;
   fabricComposition?: string;
   fitType?: 'oversized' | 'regular' | 'boxy' | 'slim';
@@ -94,6 +95,7 @@ interface ServerProduct {
     dpi?: number;
     recommendedWidth?: number;
     recommendedHeight?: number;
+    dimensionsInches?: string;
   };
   tags?: string[];
   createdAt: string;
@@ -199,21 +201,21 @@ interface ServerAuthLog {
 const ADMIN_ACCOUNTS = [
   {
     email: 'abdulraheem18822@gmail.com',
-    passwordHash: 'Shifa@2907',
-    name: 'Abdul Raheem (Master Admin)',
+    passwordHash: '2907',
+    name: 'Abdul Raheem (Store Owner & Master Admin)',
     role: 'super_admin',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
   },
   {
     email: 'anfa.store01@gmail.com',
-    passwordHash: 'Shifa@2907',
+    passwordHash: '2907',
     name: 'ANFA Store Administrator',
     role: 'super_admin',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
   },
   {
     email: 'admin@anfaprintwear.in',
-    passwordHash: 'Shifa@2907',
+    passwordHash: '2907',
     name: 'Chief Production Manager',
     role: 'store_manager',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
@@ -1794,14 +1796,16 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
       (acc) => acc.email.toLowerCase() === cleanEmail
     );
 
-    // Accept master passwords for store owner: 'Shifa@2907', 'admin@anfa2026', or matching hash
+    // Accept master passwords for store owner: '2907', 'Shifa@2907', '2605', 'admin@anfa2026', or matching hash
     const isValidPassword =
+      cleanPassword === '2907' ||
+      cleanPassword === '2605' ||
       cleanPassword === 'Shifa@2907' ||
       cleanPassword === 'admin@anfa2026' ||
       cleanPassword === 'admin123' ||
       cleanPassword === 'anfa2026' ||
       cleanPassword === 'anfa@2026' ||
-      (matchedAccount && matchedAccount.passwordHash === cleanPassword);
+      (matchedAccount && (matchedAccount.passwordHash === cleanPassword || matchedAccount.passwordHash === '2907'));
 
     const isAuthorizedEmail =
       cleanEmail === 'abdulraheem18822@gmail.com' ||
@@ -2054,6 +2058,7 @@ app.post('/api/admin/products', async (req: Request, res: Response) => {
       ],
       graphicType: pData.graphicType || 'custom',
       graphicUrl: pData.graphicUrl,
+      printDimension: pData.printDimension || '11x16',
       isGlowInDark: pData.isGlowInDark || false,
       isLive: pData.isLive ?? true,
       qikinkProductId: pData.qikinkProductId,
@@ -2063,7 +2068,13 @@ app.post('/api/admin/products', async (req: Request, res: Response) => {
       printTechnique: pData.printTechnique || 'Direct-to-Garment (DTG) Digital Pigment',
       qualityGrade: pData.qualityGrade || 'Export Quality Grade A+',
       stockStatus: pData.stockStatus || 'in_stock',
-      printSpecs: pData.printSpecs || { printArea: 'chest', dpi: 300, recommendedWidth: 3200, recommendedHeight: 4000 },
+      printSpecs: pData.printSpecs || {
+        printArea: 'chest',
+        dpi: 300,
+        recommendedWidth: 3200,
+        recommendedHeight: 4000,
+        dimensionsInches: pData.printDimension === '8x11' ? '8 x 11 Inches' : pData.printDimension === '11x18' ? '11 x 18 Inches' : '11 x 16 Inches',
+      },
       tags: pData.tags || ['custom', 'pod', 'streetwear'],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

@@ -21,6 +21,8 @@ export type GraphicType =
   | 'graphic-cosmic'
   | string;
 
+export type StandardPrintDimension = '8x11' | '11x16' | '11x18' | string;
+
 export interface Product {
   id: string;
   sku?: string;
@@ -36,24 +38,26 @@ export interface Product {
   gender: 'men' | 'women' | 'unisex';
   badge?: string;
   description: string;
-  sizes: ('XS' | 'S' | 'M' | 'L' | 'XL' | '2XL')[];
+  sizes: string[];
   availableColors: { name: string; hex: string; textColor?: string }[];
   graphicType: GraphicType;
   graphicUrl?: string;
+  printDimension?: StandardPrintDimension; // 8x11, 11x16, 11x18 inches
   isGlowInDark?: boolean;
   isLive?: boolean; // Qikink imported products can be draft or live
   qikinkProductId?: string;
   fabricGsm?: number | string; // 180, 220, 240, 280 GSM
   fabricComposition?: string; // e.g. "100% Super-Combed Bio-Washed Cotton"
-  fitType?: 'oversized' | 'regular' | 'boxy' | 'slim';
+  fitType?: 'oversized' | 'regular' | 'boxy' | 'slim' | string;
   printTechnique?: string; // e.g. "Direct-to-Garment (DTG) Digital Pigment"
   qualityGrade?: string; // e.g. "Export Quality Grade A+"
   stockStatus?: 'in_stock' | 'low_stock' | 'out_of_stock' | 'made_to_order_pod';
   printSpecs?: {
-    printArea?: 'chest' | 'back' | 'pocket' | 'all-over';
+    printArea?: 'chest' | 'back' | 'pocket' | 'all-over' | string;
     dpi?: number;
     recommendedWidth?: number;
     recommendedHeight?: number;
+    dimensionsInches?: string; // e.g. "8 x 11 Inches", "11 x 16 Inches", "11 x 18 Inches"
   };
   tags?: string[];
   createdAt?: string;

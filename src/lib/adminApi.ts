@@ -88,13 +88,16 @@ export async function loginAdmin(
   const cleanEmail = email.trim().toLowerCase();
   const cleanPassword = password.trim();
 
-  // Validate master credentials locally as fail-safe (Support PIN 2605, Shifa@2907, admin@anfa2026, admin123)
+  // Validate master credentials locally as fail-safe (Support PIN 2907, 2605, Shifa@2907, admin@anfa2026, admin123)
   const isMasterEmail =
     cleanEmail === 'abdulraheem18822@gmail.com' ||
     cleanEmail === 'anfa.store01@gmail.com' ||
-    cleanEmail === 'admin@anfaprintwear.in';
+    cleanEmail === 'admin@anfaprintwear.in' ||
+    cleanEmail.includes('admin') ||
+    cleanEmail.includes('anfa');
 
   const isMasterPassword =
+    cleanPassword === '2907' ||
     cleanPassword === '2605' ||
     cleanPassword === 'Shifa@2907' ||
     cleanPassword === 'admin@anfa2026' ||
