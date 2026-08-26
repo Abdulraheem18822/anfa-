@@ -20,7 +20,7 @@ import { ProductGrid } from './components/ProductGrid';
 import { InstagramGallery } from './components/InstagramGallery';
 import { ValueGuarantees } from './components/ValueGuarantees';
 import { Footer } from './components/Footer';
-import { QuickViewModal } from './components/QuickViewModal';
+import { ProductDetailPage } from './components/ProductDetailPage';
 import { CartDrawer } from './components/CartDrawer';
 import { WishlistDrawer } from './components/WishlistDrawer';
 import { PODStudioModal } from './components/PODStudioModal';
@@ -153,7 +153,7 @@ export default function App() {
   const [isPODStudioOpen, setIsPODStudioOpen] = useState<boolean>(false);
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
   const [isStoreAdminOpen, setIsStoreAdminOpen] = useState<boolean>(false);
-  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // Dynamic Catalog State (Synced with Backend / Admin edits)
   const [catalogProducts, setCatalogProducts] = useState<Product[]>(MOCK_PRODUCTS);
@@ -371,11 +371,13 @@ export default function App() {
   const handleOpenProductById = (productId: string) => {
     const found = catalogProducts.find((p) => p.id === productId) || MOCK_PRODUCTS.find((p) => p.id === productId);
     if (found) {
-      setQuickViewProduct(found);
+      setSelectedProduct(found);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
   const handleSelectCategoryAndScroll = (category: string) => {
+    setSelectedProduct(null);
     setSearchQuery('');
     setActiveCategory(category);
     const gridEl = document.getElementById('products-section');
@@ -385,6 +387,7 @@ export default function App() {
   };
 
   const handleSearch = (query: string) => {
+    setSelectedProduct(null);
     const q = query.toLowerCase().trim();
     setSearchQuery(q);
 
@@ -445,130 +448,166 @@ export default function App() {
         onSelectCategory={handleSelectCategoryAndScroll}
         onSearch={handleSearch}
         products={catalogProducts}
-        onSelectProduct={(p) => setQuickViewProduct(p)}
+        onSelectProduct={(p) => {
+          setSelectedProduct(p);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
       />
 
-      {/* Main Landing Page Content */}
+      {/* Main Content Area */}
       <main className="flex-1">
-        {/* Split Carousel Hero Banners (Unforgettable single line & wide search) */}
-        <HeroBanners
-          settings={settings}
-          onQuickView={(product) => setQuickViewProduct(product)}
-          onAddToCart={(product, size) => handleAddToCart(product, undefined, undefined, size, 1)}
-          onExploreCategory={handleSelectCategoryAndScroll}
-          onExploreCollection={handleSelectCategoryAndScroll}
-          onSearchSubmit={handleSearch}
-        />
-
-        {/* Partner Brands Grid / Below-Banner Clickable Category Menu */}
-        <PartnerBrands
-          activeCategory={activeCategory}
-          onSelectCategory={handleSelectCategoryAndScroll}
-        />
-
-        {/* 3-Column Editorial Promo Banner Cards */}
-        <PromoCards
-          promos={MOCK_PROMOS}
-          onShopCategory={handleSelectCategoryAndScroll}
-          onSelectPromo={(_graphicType, category) => {
-            handleSelectCategoryAndScroll(category);
-          }}
-          onQuickView={(p) => setQuickViewProduct(p)}
-        />
-
-        {/* Our Products Grid with Category Tabs, Swatches, and Hover Actions */}
-        <div id="products-section">
-          <ProductGrid
-            products={catalogProducts}
+        {selectedProduct ? (
+          /* Full Page Product Detail View with Border and Specifications */
+          <ProductDetailPage
+            product={selectedProduct}
             settings={settings}
-            activeCategory={activeCategory}
-            selectedCategory={activeCategory}
-            onSelectCategory={setActiveCategory}
-            searchQuery={searchQuery}
-            onQuickView={(product) => setQuickViewProduct(product)}
-            onAddToCart={(product, size) => handleAddToCart(product, undefined, undefined, size, 1)}
-            onQuickAdd={(product) => handleAddToCart(product)}
-            onToggleWishlist={handleToggleWishlist}
-            wishlistProductIds={currentWishlistIds}
-            isWishlisted={(id) => currentWishlistIds.includes(id)}
-          />
-        </div>
-
-        {/* Interactive Custom POD Studio Callout Banner (Kept as requested) */}
-        <section className="bg-neutral-900 text-white py-16 px-4 md:px-8 relative overflow-hidden my-8 select-none">
-          <div
-            className="absolute inset-0 opacity-10 pointer-events-none"
-            style={{
-              backgroundImage: 'radial-gradient(circle, #f59e0b 1px, transparent 1px)',
-              backgroundSize: '32px 32px',
+            onBack={() => {
+              setSelectedProduct(null);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
+            onAddToCart={handleAddToCart}
+            onToggleWishlist={handleToggleWishlist}
+            isWishlisted={currentWishlistIds.includes(selectedProduct.id)}
+            allProducts={catalogProducts}
+            onSelectProduct={(p) => {
+              setSelectedProduct(p);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            onOpenPODStudio={() => setIsPODStudioOpen(true)}
           />
+        ) : (
+          /* Main Landing Page Content */
+          <>
+            {/* Split Carousel Hero Banners (Unforgettable single line & wide search) */}
+            <HeroBanners
+              settings={settings}
+              onQuickView={(product) => {
+                setSelectedProduct(product);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              onAddToCart={(product, size) => handleAddToCart(product, undefined, undefined, size, 1)}
+              onExploreCategory={handleSelectCategoryAndScroll}
+              onExploreCollection={handleSelectCategoryAndScroll}
+              onSearchSubmit={handleSearch}
+            />
 
-          <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-10 relative z-10">
-            {/* Left Info */}
-            <div className="max-w-xl text-center lg:text-left space-y-4">
-              <div className="inline-flex items-center space-x-2 bg-amber-400/10 border border-amber-400/30 text-amber-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>On-Demand Manufacturing</span>
-              </div>
-              <h2 className="font-['Oswald'] text-3xl md:text-5xl font-bold uppercase tracking-tight leading-tight">
-                CREATE YOUR OWN <span className="text-amber-400">SIGNATURE</span> T-SHIRT
-              </h2>
-              <p className="text-neutral-300 text-sm md:text-base leading-relaxed">
-                Upload your custom artwork directly from your device or drive, select your favorite garment color and size, customize your print dimensions, and send your design straight to our DTG production team in Kolkata.
-              </p>
-              <div className="pt-2 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
-                <button
-                  id="pod-customizer-banner-btn"
-                  onClick={() => setIsPODStudioOpen(true)}
-                  className="w-full sm:w-auto px-8 py-4 bg-amber-400 hover:bg-amber-500 text-black font-['Oswald'] font-bold text-sm tracking-wider uppercase rounded-xl flex items-center justify-center space-x-2 transition shadow-xl active:scale-95"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>START CUSTOMIZING NOW</span>
-                </button>
-                <div className="text-xs text-neutral-400 flex items-center space-x-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  <span>No minimum order quantity required</span>
+            {/* Partner Brands Grid / Below-Banner Clickable Category Menu */}
+            <PartnerBrands
+              activeCategory={activeCategory}
+              onSelectCategory={handleSelectCategoryAndScroll}
+            />
+
+            {/* 3-Column Editorial Promo Banner Cards */}
+            <PromoCards
+              promos={MOCK_PROMOS}
+              onShopCategory={handleSelectCategoryAndScroll}
+              onSelectPromo={(_graphicType, category) => {
+                handleSelectCategoryAndScroll(category);
+              }}
+              onQuickView={(p) => {
+                setSelectedProduct(p);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            />
+
+            {/* Our Products Grid with Category Tabs, Swatches, and Hover Actions */}
+            <div id="products-section">
+              <ProductGrid
+                products={catalogProducts}
+                settings={settings}
+                activeCategory={activeCategory}
+                selectedCategory={activeCategory}
+                onSelectCategory={setActiveCategory}
+                searchQuery={searchQuery}
+                onQuickView={(product) => {
+                  setSelectedProduct(product);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                onAddToCart={(product, size) => handleAddToCart(product, undefined, undefined, size, 1)}
+                onQuickAdd={(product) => handleAddToCart(product)}
+                onToggleWishlist={handleToggleWishlist}
+                wishlistProductIds={currentWishlistIds}
+                isWishlisted={(id) => currentWishlistIds.includes(id)}
+              />
+            </div>
+
+            {/* Interactive Custom POD Studio Callout Banner */}
+            <section className="bg-neutral-900 text-white py-16 px-4 md:px-8 relative overflow-hidden my-8 select-none">
+              <div
+                className="absolute inset-0 opacity-10 pointer-events-none"
+                style={{
+                  backgroundImage: 'radial-gradient(circle, #f59e0b 1px, transparent 1px)',
+                  backgroundSize: '32px 32px',
+                }}
+              />
+
+              <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-10 relative z-10">
+                {/* Left Info */}
+                <div className="max-w-xl text-center lg:text-left space-y-4">
+                  <div className="inline-flex items-center space-x-2 bg-amber-400/10 border border-amber-400/30 text-amber-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>On-Demand Manufacturing</span>
+                  </div>
+                  <h2 className="font-['Oswald'] text-3xl md:text-5xl font-bold uppercase tracking-tight leading-tight">
+                    CREATE YOUR OWN <span className="text-amber-400">SIGNATURE</span> T-SHIRT
+                  </h2>
+                  <p className="text-neutral-300 text-sm md:text-base leading-relaxed">
+                    Upload your custom artwork directly from your device or drive, select your favorite garment color and size, customize your print dimensions, and send your design straight to our DTG production team in Kolkata.
+                  </p>
+                  <div className="pt-2 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
+                    <button
+                      id="pod-customizer-banner-btn"
+                      onClick={() => setIsPODStudioOpen(true)}
+                      className="w-full sm:w-auto px-8 py-4 bg-amber-400 hover:bg-amber-500 text-black font-['Oswald'] font-bold text-sm tracking-wider uppercase rounded-xl flex items-center justify-center space-x-2 transition shadow-xl active:scale-95"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>START CUSTOMIZING NOW</span>
+                    </button>
+                    <div className="text-xs text-neutral-400 flex items-center space-x-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                      <span>No minimum order quantity required</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Interactive Mockup Visual */}
+                <div className="w-full max-w-md bg-neutral-800/80 border border-neutral-700/80 rounded-2xl p-6 shadow-2xl flex flex-col items-center">
+                  <div className="w-64 h-64 relative flex items-center justify-center">
+                    <TShirtMockup
+                      shirtColor="#121212"
+                      graphicType="graphic-tokyo"
+                      customText="ANFA APPAREL"
+                      customFont="'Oswald', sans-serif"
+                      showShadow={true}
+                      className="w-full h-full"
+                    />
+                  </div>
+                  <div className="mt-4 w-full bg-neutral-900 rounded-xl p-3 flex items-center justify-between text-xs text-neutral-300 border border-neutral-700">
+                    <span className="font-semibold text-white">Live DTG Print Preview Engine</span>
+                    <button
+                      onClick={() => setIsPODStudioOpen(true)}
+                      className="text-amber-400 hover:text-amber-300 font-bold flex items-center space-x-1"
+                    >
+                      <span>Open Studio</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            </section>
 
-            {/* Right Interactive Mockup Visual */}
-            <div className="w-full max-w-md bg-neutral-800/80 border border-neutral-700/80 rounded-2xl p-6 shadow-2xl flex flex-col items-center">
-              <div className="w-64 h-64 relative flex items-center justify-center">
-                <TShirtMockup
-                  shirtColor="#121212"
-                  graphicType="graphic-tokyo"
-                  customText="ANFA APPAREL"
-                  customFont="'Oswald', sans-serif"
-                  showShadow={true}
-                  className="w-full h-full"
-                />
-              </div>
-              <div className="mt-4 w-full bg-neutral-900 rounded-xl p-3 flex items-center justify-between text-xs text-neutral-300 border border-neutral-700">
-                <span className="font-semibold text-white">Live DTG Print Preview Engine</span>
-                <button
-                  onClick={() => setIsPODStudioOpen(true)}
-                  className="text-amber-400 hover:text-amber-300 font-bold flex items-center space-x-1"
-                >
-                  <span>Open Studio</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
+            {/* Instagram Lookbook Community Showcase */}
+            <InstagramGallery
+              posts={MOCK_INSTAGRAM_POSTS}
+              storeHandle={settings.socialHandle}
+              products={catalogProducts}
+              onSelectProductById={handleOpenProductById}
+            />
 
-        {/* Instagram Lookbook Community Showcase */}
-        <InstagramGallery
-          posts={MOCK_INSTAGRAM_POSTS}
-          storeHandle={settings.socialHandle}
-          products={catalogProducts}
-          onSelectProductById={handleOpenProductById}
-        />
-
-        {/* Trust Badges & Guarantee */}
-        <ValueGuarantees settings={settings} />
+            {/* Trust Badges & Guarantee */}
+            <ValueGuarantees settings={settings} />
+          </>
+        )}
       </main>
 
       {/* Global E-commerce Footer (without newsletter, with Kolkata address & customer care) */}
@@ -600,17 +639,6 @@ export default function App() {
         cartCount={currentCartItems.reduce((acc, i) => acc + i.quantity, 0)}
         wishlistCount={currentWishlistIds.length}
         settings={settings}
-      />
-
-      {/* Quick View Modal */}
-      <QuickViewModal
-        product={quickViewProduct}
-        onClose={() => setQuickViewProduct(null)}
-        settings={settings}
-        onAddToCart={handleAddToCart}
-        onToggleWishlist={handleToggleWishlist}
-        isWishlisted={quickViewProduct ? currentWishlistIds.includes(quickViewProduct.id) : false}
-        isOpen={!!quickViewProduct}
       />
 
       {/* Cart Slide-out Drawer with Checkout Flow */}
