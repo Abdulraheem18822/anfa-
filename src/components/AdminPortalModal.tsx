@@ -48,6 +48,7 @@ import {
   StandardPrintDimension,
   QikinkFulfillmentOrder as CustomerOrder,
   StoreSettings,
+  CustomDesignUpload,
 } from '../types/store';
 import {
   loginAdmin,
@@ -63,9 +64,17 @@ import {
   updateAdminOrderStatus,
   fetchCustomerAuthLogs,
   fetchSupabaseLiveStatus,
+  fetchAdminCustomDesigns,
+  updateCustomDesignStatus,
 } from '../lib/adminApi';
 import { TShirtMockup } from './TShirtMockup';
-import { uploadCustomDesignToSupabase } from '../lib/supabase';
+import {
+  uploadCustomDesignToSupabase,
+  ProductService,
+  CustomDesignService,
+  checkSupabaseConnection,
+  syncLocalStateWithSupabase,
+} from '../lib/supabase';
 
 interface AdminPortalModalProps {
   isOpen: boolean;
@@ -74,7 +83,7 @@ interface AdminPortalModalProps {
   onRefreshStorefrontCatalog?: (updatedCatalog?: Product[]) => void;
 }
 
-type SimpleAdminTab = 'products' | 'orders' | 'customers';
+type SimpleAdminTab = 'products' | 'orders' | 'custom_designs' | 'customers';
 
 const GARMENT_COLOR_PALETTE = [
   { name: 'Pitch Black', hex: '#1E1E24' },
@@ -153,11 +162,13 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [authLogs, setAuthLogs] = useState<AuthEventLog[]>([]);
+  const [customDesigns, setCustomDesigns] = useState<CustomDesignUpload[]>([]);
   const [supabaseStatus, setSupabaseStatus] = useState<{
     connected: boolean;
     latencyMs?: number;
   }>({ connected: true, latencyMs: 24 });
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [isSyncingSupabase, setIsSyncingSupabase] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Filters & Search
@@ -165,6 +176,11 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
   const [productCategoryFilter, setProductCategoryFilter] = useState('all');
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('all');
+  const [customDesignSearch, setCustomDesignSearch] = useState('');
+  const [customDesignStatusFilter, setCustomDesignStatusFilter] = useState('all');
+  const [authLogSearch, setAuthLogSearch] = useState('');
+  const [authLogTypeFilter, setAuthLogTypeFilter] = useState('all');
+  const [previewDesignModal, setPreviewDesignModal] = useState<CustomDesignUpload | null>(null);
 
   // Product Add / Edit Modal State
   const [isEditProductOpen, setIsEditProductOpen] = useState(false);
@@ -242,22 +258,107 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
   const fetchAllData = async () => {
     setIsLoadingData(true);
     try {
-      const [prods, ords, logs, spStatus] = await Promise.all([
+      const [prods, ords, logs, spStatus, designs] = await Promise.all([
         fetchAdminProducts(),
         fetchAdminOrders(),
         fetchCustomerAuthLogs(),
         fetchSupabaseLiveStatus(),
+        fetchAdminCustomDesigns(),
       ]);
 
       if (prods && prods.length > 0) setProducts(prods);
       if (ords) setOrders(ords);
       if (logs) setAuthLogs(logs);
+      if (designs) setCustomDesigns(designs);
       if (spStatus) setSupabaseStatus({ connected: spStatus.connected, latencyMs: spStatus.latencyMs });
     } catch (err) {
       console.error('Error fetching admin data:', err);
     } finally {
       setIsLoadingData(false);
     }
+  };
+
+  // Sync state explicitly to Supabase
+  const handleSyncSupabase = async () => {
+    setIsSyncingSupabase(true);
+    try {
+      const res = await syncLocalStateWithSupabase({
+        products,
+        orders,
+        customDesigns,
+        currentUser: null,
+      });
+      if (res.success) {
+        showToast('✓ Successfully synced products, orders, & designs to Supabase database!');
+        fetchAllData();
+      } else {
+        showToast(`Supabase sync notice: ${res.errors.join(', ')}`);
+      }
+    } catch (err: any) {
+      showToast(`Sync notice: ${err?.message || 'Check database connection'}`);
+    } finally {
+      setIsSyncingSupabase(false);
+    }
+  };
+
+  // Update Custom Design Approval Status
+  const handleUpdateDesignStatus = async (
+    designId: string,
+    approvalStatus: 'pending_review' | 'approved_for_print' | 'revision_requested' | 'rejected',
+    adminNotes?: string
+  ) => {
+    const res = await updateCustomDesignStatus(designId, approvalStatus, adminNotes);
+    if (res.success) {
+      setCustomDesigns((prev) =>
+        prev.map((d) =>
+          d.id === designId
+            ? { ...d, approvalStatus, adminNotes: adminNotes ?? d.adminNotes }
+            : d
+        )
+      );
+      showToast(`✓ Custom design marked as: ${approvalStatus.replace(/_/g, ' ').toUpperCase()}`);
+    } else {
+      showToast(`Status update notice: ${res.error || 'Saved locally'}`);
+    }
+  };
+
+  // 1-Click Convert Customer Upload to Live Store Product
+  const handlePublishCustomDesignAsProduct = (design: CustomDesignUpload) => {
+    const cleanTitle = design.fileName
+      .replace(/\.[^/.]+$/, '')
+      .replace(/[-_]/g, ' ')
+      .replace(/\b\w/g, (l) => l.toUpperCase());
+
+    setEditingProduct(null);
+    setProductForm({
+      name: `${cleanTitle} Streetwear Graphic Tee`,
+      sku: `POD-${Math.floor(1000 + Math.random() * 9000)}`,
+      price: 799,
+      originalPrice: 1299,
+      category: 'new-arrival',
+      gender: 'unisex',
+      badge: 'CUSTOM ARTIST EDITION',
+      description: `Exclusive artist graphic custom printed on premium 240 GSM bio-washed heavy cotton. Submitted by customer (${design.customerEmail || design.phone || 'Store User'}).`,
+      fabricGsm: 240,
+      fabricComposition: '100% Super-Combed Bio-Washed Organic Cotton',
+      fitType: 'oversized',
+      printTechnique: 'Direct-to-Garment (DTG) 300 DPI Eco Pigment',
+      qualityGrade: 'Export Quality Grade A+',
+      printDimension: (design.printDimension as StandardPrintDimension) || '11x16',
+      sizes: ['S', 'M', 'L', 'XL', '2XL'],
+      availableColors: [
+        { name: 'Pitch Black', hex: '#1E1E24' },
+        { name: 'Pure White', hex: '#FFFFFF' },
+        { name: 'Navy Blue', hex: '#1A2A44' },
+      ],
+      shirtColor: '#1E1E24',
+      graphicType: 'custom',
+      graphicUrl: design.fileUrl,
+      mockupUrl: design.fileUrl,
+      isGlowInDark: false,
+      isLive: true,
+    });
+    setIsEditProductOpen(true);
   };
 
   useEffect(() => {
@@ -448,6 +549,12 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
         );
         setProducts(newProductsList);
 
+        // Also persist directly to Supabase table
+        const fullProd = newProductsList.find((p) => p.id === editingProduct.id);
+        if (fullProd) {
+          ProductService.upsert(fullProd).catch((e) => console.warn('Supabase product sync notice:', e));
+        }
+
         showToast(`✓ Product "${productForm.name}" updated and live!`);
         setIsEditProductOpen(false);
         if (onRefreshStorefrontCatalog) onRefreshStorefrontCatalog(newProductsList);
@@ -490,6 +597,9 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
         const createdProduct = (res.success && res.product) ? res.product : (newProductPayload as Product);
         const newProductsList = [createdProduct, ...products];
         setProducts(newProductsList);
+
+        // Also persist directly to Supabase table
+        ProductService.upsert(createdProduct).catch((e) => console.warn('Supabase product sync notice:', e));
 
         showToast(`✓ New product "${productForm.name}" is now live in category "${productForm.category}"!`);
         setIsEditProductOpen(false);
@@ -559,6 +669,26 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
       o.customerPhone.includes(orderSearch);
     const matchesStatus = orderStatusFilter === 'all' || o.qikinkStatus === orderStatusFilter;
     return matchesSearch && matchesStatus;
+  });
+
+  // Filtered Custom Designs
+  const filteredCustomDesigns = customDesigns.filter((d) => {
+    const matchesSearch =
+      (d.fileName || '').toLowerCase().includes(customDesignSearch.toLowerCase()) ||
+      (d.customerEmail || '').toLowerCase().includes(customDesignSearch.toLowerCase()) ||
+      (d.phone || '').includes(customDesignSearch);
+    const matchesStatus = customDesignStatusFilter === 'all' || d.approvalStatus === customDesignStatusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  // Filtered Customer Auth Logs
+  const filteredAuthLogs = authLogs.filter((log) => {
+    const matchesSearch =
+      (log.email || '').toLowerCase().includes(authLogSearch.toLowerCase()) ||
+      (log.userName || '').toLowerCase().includes(authLogSearch.toLowerCase()) ||
+      (log.details || '').toLowerCase().includes(authLogSearch.toLowerCase());
+    const matchesType = authLogTypeFilter === 'all' || log.eventType === authLogTypeFilter;
+    return matchesSearch && matchesType;
   });
 
   // Generate WhatsApp / Email Format for Supplier Dispatch

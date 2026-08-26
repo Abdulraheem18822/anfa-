@@ -28,6 +28,7 @@ import {
   ReturnExchangeRequest,
   normalizePhone,
 } from '../lib/customerApi';
+import { logCustomerAuthEvent } from '../lib/adminApi';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -219,6 +220,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         onAddNewUser(authRes.userProfile);
         setActiveSubpoint('main');
         setAuthStep('phone');
+        logCustomerAuthEvent({
+          userId: authRes.userProfile.id,
+          userEmail: authRes.userProfile.email || `${normalizePhone(inputPhone)}@anfaprintwear.in`,
+          userName: authRes.userProfile.name,
+          eventType: 'login',
+          status: 'success',
+          details: `Logged in via 10-digit mobile number +91 ${normalizePhone(inputPhone)}`,
+        });
       } else {
         setAuthError(authRes.error || 'Verification failed. Please try again.');
       }
@@ -238,6 +247,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       onAddNewUser(fallbackUser);
       setActiveSubpoint('main');
       setAuthStep('phone');
+      logCustomerAuthEvent({
+        userId: fallbackUser.id,
+        userEmail: fallbackUser.email,
+        userName: fallbackUser.name,
+        eventType: 'login',
+        status: 'success',
+        details: `Logged in via mobile offline cache +91 ${clean}`,
+      });
     } finally {
       setIsAuthLoading(false);
     }
@@ -646,6 +663,16 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 <div className="pt-4 border-t border-neutral-200">
                   <button
                     onClick={() => {
+                      if (currentUser) {
+                        logCustomerAuthEvent({
+                          userId: currentUser.id,
+                          userEmail: currentUser.email || `${currentUser.phone}@anfaprintwear.in`,
+                          userName: currentUser.name,
+                          eventType: 'logout',
+                          status: 'success',
+                          details: `Customer logged out from account (+91 ${currentUser.phone})`,
+                        });
+                      }
                       if (onLogout) onLogout();
                       onClose();
                     }}
