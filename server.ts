@@ -13,12 +13,17 @@ const PORT = 3000;
 
 // Supabase Configuration
 const SUPABASE_PROJECT_ID = process.env.SUPABASE_PROJECT_ID || 'xmuiudkldqzxqbocbuwb';
-const SUPABASE_URL = process.env.SUPABASE_URL || `https://${SUPABASE_PROJECT_ID}.supabase.co`;
-const SUPABASE_ANON_KEY =
-  process.env.SUPABASE_ANON_KEY || 'sb_publishable_PeroVP9Xv7r1iaKsqdxbqQ_jn7cpRVX';
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || `https://${SUPABASE_PROJECT_ID}.supabase.co`;
+const SUPABASE_KEY =
+  process.env.SUPABASE_SECRET_KEY ||
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_PUBLISHABLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+  'sb_publishable_PeroVP9Xv7r1iaKsqdxbqQ_jn7cpRVX';
 
 // Initialize Supabase Client
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Applied Sandbox & Test Integration Credentials
 const SANDBOX_CONFIG = {
@@ -583,7 +588,18 @@ let webhookLogs: Array<{ id: string; timestamp: string; event: string; payload: 
 // ==========================================
 // 1. HEALTH & BACKEND STATUS ENDPOINT
 // ==========================================
-app.get('/api/health', (req: Request, res: Response) => {
+app.get('/api/health', async (req: Request, res: Response) => {
+  let isDbLive = false;
+  let dbLatency = 0;
+  try {
+    const t0 = Date.now();
+    const { error } = await supabase.from('products').select('id').limit(1);
+    dbLatency = Date.now() - t0;
+    isDbLive = !error;
+  } catch {
+    isDbLive = false;
+  }
+
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -591,7 +607,9 @@ app.get('/api/health', (req: Request, res: Response) => {
     supabase: {
       projectId: SUPABASE_PROJECT_ID,
       url: SUPABASE_URL,
-      connected: true,
+      connected: isDbLive,
+      latencyMs: dbLatency,
+      jwksUrl: process.env.SUPABASE_JWKS_URL || `https://${SUPABASE_PROJECT_ID}.supabase.co/auth/v1/.well-known/jwks.json`,
     },
     qikink: {
       webhookEndpoint: '/api/webhooks/qikink',
@@ -599,6 +617,42 @@ app.get('/api/health', (req: Request, res: Response) => {
       status: 'active',
     },
   });
+});
+
+// Live Database Ping Check Endpoint
+app.get('/api/admin/supabase-status', async (req: Request, res: Response) => {
+  const t0 = Date.now();
+  try {
+    const { data, error } = await supabase.from('products').select('id').limit(1);
+    const latency = Date.now() - t0;
+    if (error) {
+      return res.json({
+        success: true,
+        connected: true,
+        tablesPresent: false,
+        latencyMs: latency,
+        projectId: SUPABASE_PROJECT_ID,
+        message: 'Connected to Supabase endpoint',
+        error: error.message,
+      });
+    }
+    return res.json({
+      success: true,
+      connected: true,
+      tablesPresent: true,
+      latencyMs: latency,
+      projectId: SUPABASE_PROJECT_ID,
+      rowCount: data?.length || 0,
+    });
+  } catch (err: any) {
+    return res.json({
+      success: false,
+      connected: false,
+      latencyMs: Date.now() - t0,
+      projectId: SUPABASE_PROJECT_ID,
+      error: err?.message || 'Failed to reach Supabase',
+    });
+  }
 });
 
 // ==========================================

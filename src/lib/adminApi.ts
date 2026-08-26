@@ -399,3 +399,26 @@ export async function redispatchOrderToQikink(orderId: string): Promise<{ succes
     return { success: false };
   }
 }
+
+/**
+ * 10. Live Supabase Connection & Table Status
+ */
+export async function fetchSupabaseLiveStatus(): Promise<{
+  success: boolean;
+  connected: boolean;
+  tablesPresent?: boolean;
+  latencyMs?: number;
+  projectId?: string;
+  error?: string;
+}> {
+  try {
+    const res = await fetch('/api/admin/supabase-status', {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) return { success: false, connected: false };
+    return await safeParseJsonResponse(res, { success: true, connected: true });
+  } catch (err: any) {
+    return { success: false, connected: false, error: err?.message };
+  }
+}
+
