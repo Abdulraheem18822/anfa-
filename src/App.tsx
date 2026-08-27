@@ -10,6 +10,8 @@ import {
   INITIAL_USER_WISHLISTS,
 } from './data/mockData';
 import { Product, CartItem, StoreSettings, UserProfile } from './types/store';
+import { setupSupabaseAuthListener } from './lib/authSupabase';
+import { supabase } from './lib/supabase';
 
 // Components
 import { Navbar } from './components/Navbar';
@@ -180,6 +182,27 @@ export default function App() {
 
   useEffect(() => {
     refreshCatalog();
+  }, []);
+
+  // Supabase Global Auth State Listener (Phone / Email OTP)
+  useEffect(() => {
+    const unsubscribe = setupSupabaseAuthListener((profile) => {
+      if (profile) {
+        console.log('[App] Global Supabase Auth detected active user:', profile);
+        setCurrentUser(profile);
+        setAllUsers((prev) => {
+          const exists = prev.find((u) => u.id === profile.id || (u.phone && profile.phone && u.phone === profile.phone));
+          if (!exists) {
+            return [...prev, profile];
+          }
+          return prev.map((u) => (u.id === profile.id ? { ...u, ...profile } : u));
+        });
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   // Customer Care & Contact Modal State

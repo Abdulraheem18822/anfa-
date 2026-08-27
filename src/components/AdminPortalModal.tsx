@@ -75,6 +75,7 @@ import {
   checkSupabaseConnection,
   syncLocalStateWithSupabase,
 } from '../lib/supabase';
+import { AdminProductAdditionPage } from './AdminProductAdditionPage';
 
 interface AdminPortalModalProps {
   isOpen: boolean;
@@ -184,6 +185,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
 
   // Product Add / Edit Modal State
   const [isEditProductOpen, setIsEditProductOpen] = useState(false);
+  const [isDirectSupabaseUploaderOpen, setIsDirectSupabaseUploaderOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productForm, setProductForm] = useState<{
     id?: string;
@@ -971,13 +973,23 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                       </select>
                     </div>
 
-                    <button
-                      onClick={handleOpenCreateProduct}
-                      className="px-5 py-2.5 bg-amber-400 hover:bg-amber-500 text-black font-['Oswald'] font-bold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center space-x-2 shadow-md active:scale-95 shrink-0"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Add Product Manually</span>
-                    </button>
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <button
+                        onClick={() => setIsDirectSupabaseUploaderOpen(true)}
+                        className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-['Oswald'] font-bold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center space-x-2 shadow-md active:scale-95"
+                      >
+                        <Upload className="w-4 h-4" />
+                        <span>Direct Supabase Uploader</span>
+                      </button>
+
+                      <button
+                        onClick={handleOpenCreateProduct}
+                        className="px-5 py-2.5 bg-amber-400 hover:bg-amber-500 text-black font-['Oswald'] font-bold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center space-x-2 shadow-md active:scale-95"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Add Product Manually</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Products Grid */}
@@ -1812,6 +1824,30 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                   <span>Send via WhatsApp</span>
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Direct Supabase Product Addition Modal */}
+        {isDirectSupabaseUploaderOpen && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md overflow-y-auto">
+            <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-neutral-900 rounded-3xl border border-neutral-800 shadow-2xl">
+              <button
+                onClick={() => setIsDirectSupabaseUploaderOpen(false)}
+                className="absolute top-4 right-4 z-10 p-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white rounded-full transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <AdminProductAdditionPage
+                onProductAdded={(newProd) => {
+                  setProducts((prev) => [newProd, ...prev]);
+                  if (onRefreshStorefrontCatalog) {
+                    onRefreshStorefrontCatalog([newProd, ...products]);
+                  }
+                  setIsDirectSupabaseUploaderOpen(false);
+                  showToast(`✓ Product "${newProd.name}" added to Supabase products table & live!`);
+                }}
+              />
             </div>
           </div>
         )}

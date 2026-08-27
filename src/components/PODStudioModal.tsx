@@ -17,14 +17,16 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { TShirtMockup } from './TShirtMockup';
-import { StoreSettings } from '../types/store';
-import { validatePngDesignFile, uploadCustomDesignToSupabase, OrderService } from '../lib/supabase';
+import { StoreSettings, CartItem } from '../types/store';
+import { validatePngDesignFile, uploadCustomDesignToSupabase, OrderService, supabase, CUSTOM_DESIGNS_BUCKET } from '../lib/supabase';
+import { renderAndUploadCompositeMockup } from '../lib/canvasExporter';
 import { dispatchOrderToQikink } from '../lib/qikinkApi';
 
 interface PODStudioModalProps {
   isOpen: boolean;
   onClose: () => void;
   settings: StoreSettings;
+  onAddToCart?: (item: CartItem) => void;
 }
 
 const AVAILABLE_COLORS = [
@@ -193,7 +195,21 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
       const customerId = `cust-${customerEmail.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
       const generatedRef = `ANFA-POD-${Math.floor(100000 + Math.random() * 900000)}`;
 
-      // 1. Upload high-res transparent PNG design file to Supabase Storage bucket 'custom-designs'
+      // 1. Export HTML5 Canvas mockup composite into PNG Blob & upload to Supabase 'custom-designs' bucket
+      console.log('[POD Studio] Exporting HTML5 Canvas custom design to PNG Blob...');
+      const canvasExport = await renderAndUploadCompositeMockup({
+        shirtColor: selectedColor.hex,
+        graphicUrl: uploadedImage || undefined,
+        customText: orderNotes || undefined,
+        printScale: printScale,
+        userId: customerId,
+        customerEmail,
+      });
+
+      const customDesignUrl = canvasExport.publicUrl || uploadedImage || '';
+      console.log('[POD Studio] Canvas custom design exported! Public URL:', customDesignUrl);
+
+      // 1b. Upload original high-res transparent PNG design file if selected
       if (selectedFileObj) {
         await uploadCustomDesignToSupabase(selectedFileObj, customerId, customerEmail);
       }
@@ -207,7 +223,7 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
             customerId,
             customerEmail,
             fileName: fileName || 'custom-design.png',
-            fileUrl: uploadedImage,
+            fileUrl: customDesignUrl,
             widthPx: imageMeta?.width || 2400,
             heightPx: imageMeta?.height || 3000,
             isTransparentPng: imageMeta?.isTransparent ?? true,
@@ -218,25 +234,52 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
         console.warn('Backend custom-designs save notice:', errApi);
       }
 
-      // 2. Insert order directly into Supabase public.orders and trigger merchant alert
+      // 2. Insert order directly into Supabase public.orders with items.custom_design_url
+      const orderItems = [
+        {
+          productId: 'custom-pod-shirt',
+          name: `Custom DTG Printed Tee - ${selectedColor.name} (${selectedSize})`,
+          size: selectedSize,
+          color: selectedColor.name,
+          quantity: 1,
+          price: totalPrice,
+          custom_design_url: customDesignUrl,
+          printFileUrl: customDesignUrl,
+          printTier: printSizeTier,
+          notes: orderNotes || 'None',
+        },
+      ];
+
+      // Direct Supabase insert
+      try {
+        await supabase.from('orders').insert([
+          {
+            order_number: generatedRef,
+            user_id: customerId,
+            customer_id: customerId,
+            customer_name: customerName,
+            customer_email: customerEmail,
+            customer_phone: customerPhone || '9603344954',
+            shipping_address: 'Nilofar complex, main road, cloth market, Bhainsa, Telangana, 504103',
+            items: orderItems,
+            total_amount: totalPrice,
+            status: 'pending',
+            created_at: new Date().toISOString(),
+          },
+        ]);
+        console.log('[POD Studio] Order saved to Supabase orders table with custom_design_url:', customDesignUrl);
+      } catch (spErr) {
+        console.warn('[POD Studio] Supabase order insert notice:', spErr);
+      }
+
       await OrderService.createOrder({
         customerName,
         customerEmail,
         customerPhone: customerPhone || '9603344954',
         shippingAddress: 'Nilofar complex, main road, cloth market, Bhainsa, Telangana, 504103',
         totalAmount: totalPrice,
-        customMockupUrl: uploadedImage || undefined,
-        items: [
-          {
-            name: `Custom DTG Printed Tee - ${selectedColor.name} (${selectedSize})`,
-            size: selectedSize,
-            color: selectedColor.name,
-            quantity: 1,
-            price: totalPrice,
-            printTier: printSizeTier,
-            notes: orderNotes || 'None',
-          },
-        ],
+        customMockupUrl: customDesignUrl,
+        items: orderItems,
       }).catch((e) => console.warn('Supabase public.orders insert notice:', e));
 
       // 3. Automatically dispatch order to Qikink POD manufacturing queue
@@ -262,7 +305,7 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
             color: selectedColor.name,
             quantity: 1,
             price: totalPrice,
-            printFileUrl: uploadedImage,
+            printFileUrl: customDesignUrl,
             printPlacement: printScale <= 0.4 ? 'pocket' : 'front',
             customNotes: `Print Tier: ${printSizeTier}. Notes: ${orderNotes || 'None'}`,
           },

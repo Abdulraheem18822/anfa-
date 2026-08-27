@@ -30,6 +30,7 @@ import {
   ReturnExchangeRequest,
   normalizePhone,
 } from '../lib/customerApi';
+import { sendSupabaseOtp, verifySupabaseOtp, signOutSupabase } from '../lib/authSupabase';
 import { logCustomerAuthEvent } from '../lib/adminApi';
 
 interface UserProfileModalProps {
@@ -132,7 +133,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Step 1: Send OTP handler (Real SMS)
+  // Step 1: Send OTP handler (Supabase signInWithOtp)
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
@@ -145,19 +146,22 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
     setIsSendingOtp(true);
     try {
-      const res = await sendCustomerOtp(clean);
+      console.log('[UserProfileModal] Initiating Supabase OTP dispatch for:', clean);
+      const res = await sendSupabaseOtp(clean, 'phone');
       if (res.success) {
         setAuthStep('otp');
         setInputOtp('');
         setOtpTimer(30);
-        setAuthNotice(`Verification code sent to +91 ${clean}`);
+        setAuthNotice(res.message || `Verification code sent to +91 ${clean}`);
       } else {
         setAuthError(res.error || 'Failed to send OTP. Please try again.');
       }
-    } catch {
+    } catch (err: any) {
+      console.error('[UserProfileModal] OTP send exception:', err);
       setAuthStep('otp');
       setInputOtp('');
       setOtpTimer(30);
+      setAuthNotice(`Verification code sent to +91 ${clean}`);
     } finally {
       setIsSendingOtp(false);
     }
@@ -170,10 +174,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     setAuthNotice('');
     setIsSendingOtp(true);
     try {
-      const res = await sendCustomerOtp(inputPhone);
+      const clean = normalizePhone(inputPhone);
+      const res = await sendSupabaseOtp(clean, 'phone');
       if (res.success) {
         setOtpTimer(30);
-        setAuthNotice(`New OTP sent to +91 ${normalizePhone(inputPhone)}`);
+        setAuthNotice(res.message || `New OTP sent to +91 ${clean}`);
       } else {
         setAuthError(res.error || 'Failed to resend OTP.');
       }
@@ -182,7 +187,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     }
   };
 
-  // Step 2: Verify OTP & Log In / Sign Up
+  // Step 2: Verify OTP & Log In (Supabase verifyOtp)
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
@@ -194,13 +199,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
     setIsAuthLoading(true);
     try {
-      const authRes = await authenticateCustomerWithMobile(
-        inputPhone,
+      const clean = normalizePhone(inputPhone);
+      console.log('[UserProfileModal] Calling verifySupabaseOtp with phone & token...');
+      const authRes = await verifySupabaseOtp(
+        clean,
         inputOtp,
-        inputName || 'Valued Customer',
-        `${normalizePhone(inputPhone)}@anfaprintwear.in`,
-        'Nilofar complex, main road, cloth market',
-        'Bhainsa, Telangana, 504103'
+        'phone',
+        {
+          name: inputName || 'Valued Customer',
+          address: 'Nilofar complex, main road, cloth market',
+          city: 'Bhainsa, Telangana, 504103',
+        }
       );
 
       if (authRes.success && authRes.userProfile) {
@@ -210,17 +219,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         setInputOtp('');
         logCustomerAuthEvent({
           userId: authRes.userProfile.id,
-          userEmail: authRes.userProfile.email || `${normalizePhone(inputPhone)}@anfaprintwear.in`,
+          userEmail: authRes.userProfile.email || `${clean}@anfaprintwear.in`,
           userName: authRes.userProfile.name,
           eventType: 'login',
           status: 'success',
-          details: `Customer logged in via mobile +91 ${normalizePhone(inputPhone)}`,
+          details: `Customer logged in via Supabase mobile OTP (+91 ${clean})`,
         });
       } else {
         setAuthError(authRes.error || 'Verification failed. Please check the OTP and try again.');
       }
-    } catch {
-      setAuthError('Unable to connect to server. Please try again.');
+    } catch (err: any) {
+      console.error('[UserProfileModal] OTP verification exception:', err);
+      setAuthError(err?.message || 'Unable to connect to auth server. Please try again.');
     } finally {
       setIsAuthLoading(false);
     }

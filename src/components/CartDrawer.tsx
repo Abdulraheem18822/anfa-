@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { X, Trash2, ShoppingBag, ArrowRight, ShieldCheck, Truck, Sparkles, CheckCircle2 } from 'lucide-react';
+import { X, Trash2, ShoppingBag, ArrowRight, ShieldCheck, Truck, Sparkles, CheckCircle2, AlertCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { CartItem, StoreSettings, UserProfile, QikinkFulfillmentOrder } from '../types/store';
-import { OrderService } from '../lib/supabase';
+import { supabase, OrderService, CartService } from '../lib/supabase';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -32,6 +32,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const [promoApplied, setPromoApplied] = useState(false);
   const [promoError, setPromoError] = useState('');
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [orderComplete, setOrderComplete] = useState(false);
   const [placedOrderNumber, setPlacedOrderNumber] = useState('');
 
@@ -59,92 +60,154 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
   const handleCheckout = async () => {
     setIsCheckingOut(true);
+    setCheckoutError(null);
+
     const orderNum = `ANFA-ORD-${Math.floor(100000 + Math.random() * 900000)}`;
     setPlacedOrderNumber(orderNum);
 
     const customerPhone = currentUser?.phone || localStorage.getItem('ANFA_AUTH_PHONE') || '9603344954';
     const customerName = currentUser?.name || localStorage.getItem('ANFA_PROFILE_NAME') || `Customer ${customerPhone.slice(-4)}`;
     const customerEmail = currentUser?.email || 'anfa.store01@gmail.com';
-    const shippingAddress = {
+    const user_id = currentUser?.id || `cust-${customerPhone}`;
+
+    const shipping_address = {
       street: currentUser?.address || 'Nilofar complex, main road, cloth market',
       city: currentUser?.city || 'Bhainsa',
-      state: currentUser?.state || 'Telangana',
-      pincode: currentUser?.pincode || '504103',
+      state: 'Telangana',
+      pincode: '504103',
       country: 'India',
     };
 
-    const orderPayload = {
-      orderNumber: orderNum,
-      customerId: currentUser?.id || `cust-${customerPhone}`,
-      customerName,
-      customerEmail,
-      customerPhone,
-      shippingAddress,
-      items: cartItems.map((item) => ({
-        productId: item.productId,
-        name: item.name,
-        size: item.size || 'L',
-        color: item.shirtColorName || 'Pitch Black',
-        quantity: item.quantity,
-        price: item.price,
-        printFileUrl: item.graphicUrl || item.customGraphicUrl || item.image || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80',
-        printPlacement: 'front' as const,
-        customNotes: 'Direct DTG Pigment High Density Print',
-      })),
-      totalAmount: total,
-    };
+    // Format items array mapping custom_design_url from POD studio
+    const items = cartItems.map((item) => ({
+      productId: item.productId,
+      name: item.name,
+      size: item.size || 'L',
+      color: item.shirtColorName || 'Pitch Black',
+      quantity: item.quantity,
+      price: item.price,
+      custom_design_url: (item as any).custom_design_url || item.graphicUrl || item.customGraphicUrl || item.image || '',
+      printFileUrl: (item as any).custom_design_url || item.graphicUrl || item.customGraphicUrl || item.image || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80',
+      printPlacement: 'front' as const,
+      customNotes: 'Direct DTG Pigment High Density Print',
+    }));
+
+    console.log('[Order Checkout Processor] Placing order with payload:', {
+      user_id,
+      items,
+      total_amount: total,
+      shipping_address,
+      status: 'pending',
+    });
 
     try {
-      // 1. Submit to Backend API Fulfillment (dispatches to server cache & database)
-      await fetch('/api/orders/fulfillment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderPayload),
-      });
+      // -------------------------------------------------------------
+      // Requirement 3: Insert order data into supabase.from('orders')
+      // [{ user_id, items, total_amount, shipping_address, status: 'pending' }]
+      // -------------------------------------------------------------
+      const { data: supabaseOrderData, error: supabaseOrderError } = await supabase
+        .from('orders')
+        .insert([
+          {
+            id: `ord-${Date.now()}`,
+            order_number: orderNum,
+            user_id: user_id,
+            customer_id: user_id,
+            customer_name: customerName,
+            customer_email: customerEmail,
+            customer_phone: customerPhone,
+            items: items,
+            total_amount: total,
+            shipping_address: typeof shipping_address === 'string' ? shipping_address : JSON.stringify(shipping_address),
+            status: 'pending',
+            created_at: new Date().toISOString(),
+          },
+        ])
+        .select();
 
-      // 2. Trigger Real Email Notification to Merchant (abdulraheem18822@gmail.com & anfa.store01@gmail.com)
-      await fetch('/api/orders/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...orderPayload,
-          orderId: orderNum,
-        }),
-      }).catch((e) => console.warn('Email notify notice:', e));
+      if (supabaseOrderError) {
+        console.error('[Order Checkout Processor] Supabase order insertion error:', supabaseOrderError);
+        // Fallback minimal insert if table has strict schema
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('orders')
+          .insert([
+            {
+              user_id: user_id,
+              items: items,
+              total_amount: total,
+              shipping_address: typeof shipping_address === 'string' ? shipping_address : JSON.stringify(shipping_address),
+              status: 'pending',
+            },
+          ])
+          .select();
 
-      // 3. Submit directly to Supabase client-side as well
-      const fullOrder: QikinkFulfillmentOrder = {
-        id: `order-${Date.now()}`,
-        orderNumber: orderNum,
-        customerId: orderPayload.customerId,
-        customerName: orderPayload.customerName,
-        customerEmail: orderPayload.customerEmail,
-        customerPhone: orderPayload.customerPhone,
-        shippingAddress: orderPayload.shippingAddress,
-        items: orderPayload.items,
-        totalAmount: orderPayload.totalAmount,
-        qikinkOrderId: `QIK-ORD-${Math.floor(1000000 + Math.random() * 9000000)}`,
-        qikinkStatus: 'sent_to_qikink',
-        trackingNumber: `DELHIVERY-${Math.floor(1000000000 + Math.random() * 9000000000)}`,
-        courierName: 'Delhivery Surface Express',
-        createdAt: new Date().toISOString(),
-      };
-      await OrderService.upsert(fullOrder).catch((e) => console.warn('Supabase OrderService notice:', e));
-    } catch (err) {
-      console.warn('Order submission notice:', err);
-    } finally {
-      setIsCheckingOut(false);
+        if (fallbackError) {
+          console.error('[Order Checkout Processor] Fallback orders insert failed:', fallbackError);
+          throw new Error(`Order database write failed: ${fallbackError.message}`);
+        } else {
+          console.log('[Order Checkout Processor] Fallback orders insert succeeded:', fallbackData);
+        }
+      } else {
+        console.log('[Order Checkout Processor] Order inserted successfully into Supabase:', supabaseOrderData);
+      }
+
+      // Also submit to backend fulfillment cache & notify merchant
+      try {
+        await fetch('/api/orders/fulfillment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderNumber: orderNum,
+            customerId: user_id,
+            customerName,
+            customerEmail,
+            customerPhone,
+            shippingAddress: shipping_address,
+            items,
+            totalAmount: total,
+          }),
+        });
+
+        await fetch('/api/orders/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderNumber: orderNum,
+            orderId: orderNum,
+            customerName,
+            customerEmail,
+            customerPhone,
+            shippingAddress: shipping_address,
+            items,
+            totalAmount: total,
+          }),
+        }).catch(() => null);
+      } catch (backendNotice) {
+        console.warn('[Order Checkout Processor] Backend cache notice:', backendNotice);
+      }
+
+      // Clear cloud cart in Supabase
+      if (user_id) {
+        CartService.clearCart(user_id).catch(() => null);
+      }
+
       setOrderComplete(true);
       confetti({
         particleCount: 120,
         spread: 80,
         origin: { y: 0.6 },
       });
+    } catch (err: any) {
+      console.error('[Order Checkout Processor] Error during checkout:', err);
+      setCheckoutError(err?.message || 'Network request failed while creating order in Supabase. Please check connection and try again.');
+    } finally {
+      setIsCheckingOut(false);
     }
   };
 
   const handleFinishOrder = () => {
     setOrderComplete(false);
+    setCheckoutError(null);
     onClearCart();
     onClose();
   };
@@ -384,6 +447,17 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       </span>
                     </div>
                   </div>
+
+                  {/* Checkout Error Banner */}
+                  {checkoutError && (
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start space-x-2 text-xs text-rose-700 font-medium">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="font-bold">Order Submission Failed</p>
+                        <p className="text-[11px] text-rose-600 mt-0.5">{checkoutError}</p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Checkout Button */}
                   <button
