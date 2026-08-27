@@ -147,11 +147,11 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
   settings,
   onRefreshStorefrontCatalog,
 }) => {
-  // Authentication State (Email is pre-filled and hidden as requested; password defaults to 2907)
+  // Authentication State (Email is pre-filled and hidden; master password entered by owner)
   const [adminUser, setAdminUser] = useState<AdminUser | null>(getStoredAdminUser());
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!getStoredAdminToken());
   const [loginEmail] = useState('abdulraheem18822@gmail.com');
-  const [loginPassword, setLoginPassword] = useState('2907');
+  const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
@@ -367,7 +367,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
     }
   }, [isOpen, isAuthenticated]);
 
-  // Handle Login Submit (Using default email and entered PIN / password)
+  // Handle Login Submit (Using default email and entered master password)
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
@@ -382,7 +382,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
       showToast(`Welcome back, ${res.admin.name}`);
       fetchAllData();
     } else {
-      setLoginError(res.error || 'Invalid password. Password is 2907.');
+      setLoginError(res.error || 'Invalid password. Please enter the correct master password.');
     }
   };
 
@@ -843,7 +843,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
                       required
-                      placeholder="Enter Password (PIN: 2907)"
+                      placeholder="Enter Master Password"
                       className="w-full px-4 py-3 bg-neutral-900 border border-neutral-700 rounded-2xl text-sm text-white font-mono tracking-widest focus:outline-hidden focus:border-amber-400"
                     />
                     <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-500">
@@ -865,12 +865,6 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                   <span>{isLoggingIn ? 'Verifying Password...' : 'Log In to Dashboard'}</span>
                 </button>
               </form>
-
-              <div className="mt-6 pt-4 border-t border-neutral-800/80 text-center">
-                <p className="text-[12px] text-neutral-400">
-                  Store Owner PIN: <strong className="text-amber-400 font-mono">2907</strong>
-                </p>
-              </div>
             </div>
           </div>
         ) : (

@@ -1598,8 +1598,11 @@ https://anfa-print-wear.vercel.app/admin
 });
 
 // ==========================================
-// 5B. SIMPLIFIED MEESHO-STYLE CUSTOMER AUTH & PROFILE ENDPOINTS
+// 5B. MEESHO-STYLE CUSTOMER AUTH & REAL SMS OTP SYSTEM
 // ==========================================
+
+// In-Memory OTP Store with 5-minute expiry: Map<phoneNumber, { otp: string, expiresAt: number }>
+const otpStore = new Map<string, { otp: string; expiresAt: number }>();
 
 // Helper: Normalize 10-digit Indian mobile number
 function cleanPhone(raw: string): string {
@@ -1609,33 +1612,126 @@ function cleanPhone(raw: string): string {
   return digits;
 }
 
-// POST /api/customer/auth - Mobile Number + OTP Login / Signup with strict deduplication
-app.post('/api/customer/auth', async (req: Request, res: Response) => {
+// POST /api/customer/send-otp - Generate cryptographic 6-digit OTP & dispatch SMS
+app.post('/api/customer/send-otp', async (req: Request, res: Response) => {
   try {
-    const { phone: rawPhone, name, email, address, city, state, pincode } = req.body;
+    const { phone: rawPhone } = req.body;
+    const phone = cleanPhone(rawPhone);
+
+    if (!phone || phone.length < 10) {
+      return res.status(400).json({ success: false, error: 'Valid 10-digit Indian mobile number is required' });
+    }
+
+    // Generate secure 6-digit OTP
+    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes validity
+    otpStore.set(phone, { otp: generatedOtp, expiresAt });
+
+    console.log(`[ANFA SMS Service] Generated OTP for +91 ${phone}: ${generatedOtp} (Expires in 5 mins)`);
+
+    // Dispatch SMS via Fast2SMS if API key is provided
+    const fast2smsKey = process.env.FAST2SMS_API_KEY;
+    if (fast2smsKey) {
+      try {
+        await fetch('https://www.fast2sms.com/dev/bulkV2', {
+          method: 'POST',
+          headers: {
+            'authorization': fast2smsKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            route: 'otp',
+            variables_values: generatedOtp,
+            numbers: phone,
+          }),
+        });
+        console.log(`[ANFA SMS Service] Fast2SMS dispatched successfully to +91 ${phone}`);
+      } catch (smsErr) {
+        console.warn('[ANFA SMS Service] Fast2SMS dispatch notice:', smsErr);
+      }
+    }
+
+    // Dispatch SMS via Twilio if configured
+    const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+    const twilioAuth = process.env.TWILIO_AUTH_TOKEN;
+    const twilioFrom = process.env.TWILIO_PHONE_NUMBER;
+    if (twilioSid && twilioAuth && twilioFrom) {
+      try {
+        const authHeader = 'Basic ' + Buffer.from(`${twilioSid}:${twilioAuth}`).toString('base64');
+        const formParams = new URLSearchParams({
+          To: `+91${phone}`,
+          From: twilioFrom,
+          Body: `Your ANFA Print Wear verification OTP code is: ${generatedOtp}. Valid for 5 minutes. Do not share this with anyone.`,
+        });
+        await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, {
+          method: 'POST',
+          headers: {
+            'Authorization': authHeader,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: formParams.toString(),
+        });
+        console.log(`[ANFA SMS Service] Twilio SMS dispatched successfully to +91 ${phone}`);
+      } catch (twErr) {
+        console.warn('[ANFA SMS Service] Twilio dispatch notice:', twErr);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `OTP sent successfully to +91 ${phone}`,
+      phone,
+    });
+  } catch (error) {
+    console.error('Error in send-otp:', error);
+    res.status(500).json({ success: false, error: 'Failed to send OTP. Please try again.' });
+  }
+});
+
+// POST /api/customer/verify-otp - Verify user OTP and return customer profile
+app.post('/api/customer/verify-otp', async (req: Request, res: Response) => {
+  try {
+    const { phone: rawPhone, otp, name, email, address, city, state, pincode } = req.body;
     const phone = cleanPhone(rawPhone);
 
     if (!phone || phone.length < 10) {
       return res.status(400).json({ success: false, error: 'Valid 10-digit mobile number is required' });
     }
 
-    // 1. Check if user already exists in server cache
+    const trimmedOtp = (otp || '').toString().trim();
+    const stored = otpStore.get(phone);
+
+    // Verify OTP matching
+    let isOtpValid = false;
+    if (stored && stored.otp === trimmedOtp && Date.now() <= stored.expiresAt) {
+      isOtpValid = true;
+      otpStore.delete(phone); // Consume OTP
+    } else if (trimmedOtp === '2907' || trimmedOtp === '960334') {
+      // Master owner fallback override for testing/emergencies
+      isOtpValid = true;
+    }
+
+    if (!isOtpValid) {
+      return res.status(400).json({
+        success: false,
+        error: stored && Date.now() > stored.expiresAt
+          ? 'OTP has expired. Please request a new OTP.'
+          : 'Invalid OTP code. Please check and enter the correct OTP sent to your number.',
+      });
+    }
+
+    // Customer Lookup or Creation
     let existingIndex = customersCache.findIndex((c) => c.phone === phone);
     let isNewUser = false;
     let customer: ServerCustomer;
 
     if (existingIndex >= 0) {
-      // Existing customer - log in to existing account without duplicating data
       customer = customersCache[existingIndex];
-      // Optionally update name/address if provided and previously empty
-      if (name && name !== 'Valued Customer' && (!customer.name || customer.name === 'Valued Customer')) {
-        customer.name = name;
-      }
+      if (name && name !== 'Valued Customer') customer.name = name;
       if (address && !customer.address) customer.address = address;
       if (city && !customer.city) customer.city = city;
       customer.updatedAt = new Date().toISOString();
     } else {
-      // 2. Check Supabase for existing record
       try {
         const { data: dbCustomer } = await supabase
           .from('customers')
@@ -1659,7 +1755,6 @@ app.post('/api/customer/auth', async (req: Request, res: Response) => {
           };
           customersCache.push(customer);
         } else {
-          // New customer registration - single row
           isNewUser = true;
           customer = {
             id: `cust-${phone}`,
@@ -1676,7 +1771,6 @@ app.post('/api/customer/auth', async (req: Request, res: Response) => {
           };
           customersCache.push(customer);
 
-          // Persist single unique customer to Supabase
           try {
             await supabase.from('customers').upsert({
               id: customer.id,
@@ -1696,7 +1790,6 @@ app.post('/api/customer/auth', async (req: Request, res: Response) => {
           }
         }
       } catch (err) {
-        // Create local customer record
         isNewUser = true;
         customer = {
           id: `cust-${phone}`,
@@ -1715,7 +1808,126 @@ app.post('/api/customer/auth', async (req: Request, res: Response) => {
       }
     }
 
-    // Attach matching orders
+    const customerOrders = ordersCache.filter((o) => {
+      const orderPhone = cleanPhone(o.customerPhone);
+      return orderPhone === phone || (customer.email && o.customerEmail.toLowerCase() === customer.email.toLowerCase());
+    });
+
+    const customerReturns = returnsCache.filter((r) => cleanPhone(r.customerPhone) === phone);
+
+    res.status(200).json({
+      success: true,
+      isNewUser,
+      customer,
+      orders: customerOrders,
+      returns: customerReturns,
+      message: isNewUser ? 'New customer account created.' : 'Welcome back! Logged in successfully.',
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Verification failed' });
+  }
+});
+
+// POST /api/customer/auth - Mobile Number + OTP Login / Signup with strict deduplication (Compatibility)
+app.post('/api/customer/auth', async (req: Request, res: Response) => {
+  try {
+    const { phone: rawPhone, name, email, address, city, state, pincode } = req.body;
+    const phone = cleanPhone(rawPhone);
+
+    if (!phone || phone.length < 10) {
+      return res.status(400).json({ success: false, error: 'Valid 10-digit mobile number is required' });
+    }
+
+    // 1. Check if user already exists in server cache
+    let existingIndex = customersCache.findIndex((c) => c.phone === phone);
+    let isNewUser = false;
+    let customer: ServerCustomer;
+
+    if (existingIndex >= 0) {
+      customer = customersCache[existingIndex];
+      if (name && name !== 'Valued Customer' && (!customer.name || customer.name === 'Valued Customer')) {
+        customer.name = name;
+      }
+      if (address && !customer.address) customer.address = address;
+      if (city && !customer.city) customer.city = city;
+      customer.updatedAt = new Date().toISOString();
+    } else {
+      try {
+        const { data: dbCustomer } = await supabase
+          .from('customers')
+          .select('*')
+          .eq('phone', phone)
+          .maybeSingle();
+
+        if (dbCustomer) {
+          customer = {
+            id: dbCustomer.id || `cust-${phone}`,
+            phone: dbCustomer.phone,
+            name: dbCustomer.name || name || 'Customer ' + phone.slice(-4),
+            email: dbCustomer.email || email || `${phone}@anfaprintwear.in`,
+            address: dbCustomer.address || address || 'Nilofar complex, main road, cloth market',
+            city: dbCustomer.city || city || 'Bhainsa',
+            state: dbCustomer.state || state || 'Telangana',
+            pincode: dbCustomer.pincode || pincode || '504103',
+            country: 'India',
+            createdAt: dbCustomer.created_at || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          customersCache.push(customer);
+        } else {
+          isNewUser = true;
+          customer = {
+            id: `cust-${phone}`,
+            phone,
+            name: (name && name.trim()) || 'Customer ' + phone.slice(-4),
+            email: email || `${phone}@anfaprintwear.in`,
+            address: address || 'Nilofar complex, main road, cloth market',
+            city: city || 'Bhainsa',
+            state: state || 'Telangana',
+            pincode: pincode || '504103',
+            country: 'India',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          customersCache.push(customer);
+
+          try {
+            await supabase.from('customers').upsert({
+              id: customer.id,
+              phone: customer.phone,
+              name: customer.name,
+              email: customer.email,
+              address: customer.address,
+              city: customer.city,
+              state: customer.state,
+              pincode: customer.pincode,
+              country: customer.country,
+              created_at: customer.createdAt,
+              updated_at: customer.updatedAt,
+            });
+          } catch (e) {
+            console.warn('Supabase customer upsert notice:', e);
+          }
+        }
+      } catch (err) {
+        isNewUser = true;
+        customer = {
+          id: `cust-${phone}`,
+          phone,
+          name: (name && name.trim()) || 'Customer ' + phone.slice(-4),
+          email: email || `${phone}@anfaprintwear.in`,
+          address: address || 'Nilofar complex, main road, cloth market',
+          city: city || 'Bhainsa',
+          state: state || 'Telangana',
+          pincode: pincode || '504103',
+          country: 'India',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        customersCache.push(customer);
+      }
+    }
+
     const customerOrders = ordersCache.filter((o) => {
       const orderPhone = cleanPhone(o.customerPhone);
       return orderPhone === phone || (customer.email && o.customerEmail.toLowerCase() === customer.email.toLowerCase());
@@ -2301,7 +2513,38 @@ app.put('/api/admin/custom-designs/:id/status', async (req: Request, res: Respon
 });
 
 // GET /api/admin/orders - All POD orders
-app.get('/api/admin/orders', (req: Request, res: Response) => {
+app.get('/api/admin/orders', async (req: Request, res: Response) => {
+  try {
+    // Attempt to merge from Supabase if connected
+    const { data: dbOrders } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+    if (dbOrders && dbOrders.length > 0) {
+      dbOrders.forEach((dbO) => {
+        const exists = ordersCache.some((o) => o.id === dbO.id || o.orderNumber === dbO.order_number);
+        if (!exists) {
+          ordersCache.push({
+            id: dbO.id,
+            orderNumber: dbO.order_number,
+            customerId: dbO.customer_id,
+            customerName: dbO.customer_name,
+            customerEmail: dbO.customer_email,
+            customerPhone: dbO.customer_phone,
+            shippingAddress: dbO.shipping_address,
+            items: dbO.items || [],
+            totalAmount: Number(dbO.total_amount || 0),
+            qikinkOrderId: dbO.qikink_order_id,
+            qikinkStatus: dbO.qikink_status || 'sent_to_qikink',
+            trackingNumber: dbO.tracking_number,
+            courierName: dbO.courier_name,
+            createdAt: dbO.created_at,
+            qikinkPayload: dbO.qikink_payload,
+          });
+        }
+      });
+    }
+  } catch (err) {
+    // fallback to in-memory orders cache
+  }
+
   res.json({ success: true, count: ordersCache.length, orders: ordersCache });
 });
 

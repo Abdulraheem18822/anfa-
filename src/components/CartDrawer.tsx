@@ -62,14 +62,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     const orderNum = `ANFA-ORD-${Math.floor(100000 + Math.random() * 900000)}`;
     setPlacedOrderNumber(orderNum);
 
-    const customerName = currentUser?.name || 'Abdul Raheem';
+    const customerPhone = currentUser?.phone || localStorage.getItem('ANFA_AUTH_PHONE') || '9603344954';
+    const customerName = currentUser?.name || localStorage.getItem('ANFA_PROFILE_NAME') || `Customer ${customerPhone.slice(-4)}`;
     const customerEmail = currentUser?.email || 'anfa.store01@gmail.com';
-    const customerPhone = currentUser?.phone || '9603344954';
     const shippingAddress = {
       street: currentUser?.address || 'Nilofar complex, main road, cloth market',
       city: currentUser?.city || 'Bhainsa',
-      state: 'Telangana',
-      pincode: '504103',
+      state: currentUser?.state || 'Telangana',
+      pincode: currentUser?.pincode || '504103',
       country: 'India',
     };
 
@@ -95,14 +95,24 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     };
 
     try {
-      // 1. Submit to Backend API
+      // 1. Submit to Backend API Fulfillment (dispatches to server cache & database)
       await fetch('/api/orders/fulfillment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(orderPayload),
       });
 
-      // 2. Submit directly to Supabase client-side as well
+      // 2. Trigger Real Email Notification to Merchant (abdulraheem18822@gmail.com & anfa.store01@gmail.com)
+      await fetch('/api/orders/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...orderPayload,
+          orderId: orderNum,
+        }),
+      }).catch((e) => console.warn('Email notify notice:', e));
+
+      // 3. Submit directly to Supabase client-side as well
       const fullOrder: QikinkFulfillmentOrder = {
         id: `order-${Date.now()}`,
         orderNumber: orderNum,
@@ -119,7 +129,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         courierName: 'Delhivery Surface Express',
         createdAt: new Date().toISOString(),
       };
-      await OrderService.upsert(fullOrder);
+      await OrderService.upsert(fullOrder).catch((e) => console.warn('Supabase OrderService notice:', e));
     } catch (err) {
       console.warn('Order submission notice:', err);
     } finally {

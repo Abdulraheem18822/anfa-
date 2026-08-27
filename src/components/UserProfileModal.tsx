@@ -22,6 +22,8 @@ import {
 import { UserProfile, StoreSettings, QikinkFulfillmentOrder } from '../types/store';
 import {
   authenticateCustomerWithMobile,
+  sendCustomerOtp,
+  verifyCustomerOtp,
   fetchCustomerProfile,
   updateCustomerAddressAndProfile,
   submitReturnExchange,
@@ -55,11 +57,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 }) => {
   // Authentication State (Meesho-style Mobile + OTP)
   const [authStep, setAuthStep] = useState<'phone' | 'otp' | 'name_entry'>('phone');
-  const [inputPhone, setInputPhone] = useState('9603344954');
+  const [inputPhone, setInputPhone] = useState('');
   const [inputOtp, setInputOtp] = useState('');
-  const [inputName, setInputName] = useState('Abdul Raheem');
+  const [inputName, setInputName] = useState('');
   const [authError, setAuthError] = useState('');
+  const [authNotice, setAuthNotice] = useState('');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [otpTimer, setOtpTimer] = useState(30);
 
   // Active view inside Logged-In subpoints: 'main' | 'orders' | 'address' | 'returns'
   const [activeSubpoint, setActiveSubpoint] = useState<'main' | 'orders' | 'address' | 'returns'>('main');
@@ -88,12 +93,23 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
   const [returnSuccessMessage, setReturnSuccessMessage] = useState('');
 
+  // Countdown timer for OTP resend
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (authStep === 'otp' && otpTimer > 0) {
+      interval = setInterval(() => {
+        setOtpTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [authStep, otpTimer]);
+
   // Sync state when modal opens or user changes
   useEffect(() => {
     if (currentUser) {
-      setEditName(currentUser.name || 'Abdul Raheem');
-      setEditStreet(currentUser.address || 'Nilofar complex, main road, cloth market');
-      setEditCity(currentUser.city || 'Bhainsa');
+      setEditName(currentUser.name || '');
+      setEditStreet(currentUser.address || '');
+      setEditCity(currentUser.city || '');
       setEditState('Telangana');
       setEditPincode('504103');
 
@@ -102,76 +118,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         setIsLoadingProfile(true);
         fetchCustomerProfile(currentUser.phone)
           .then((res) => {
-            if (res.orders && res.orders.length > 0) {
+            if (res.orders) {
               setCustomerOrders(res.orders);
-            } else {
-              // Default sample orders if no prior orders
-              setCustomerOrders([
-                {
-                  id: 'ord-101',
-                  orderNumber: 'ANFA-96033',
-                  customerName: currentUser.name,
-                  customerEmail: currentUser.email,
-                  customerPhone: currentUser.phone || '9603344954',
-                  shippingAddress: {
-                    street: currentUser.address || 'Nilofar complex, main road, cloth market',
-                    city: currentUser.city || 'Bhainsa',
-                    state: 'Telangana',
-                    pincode: '504103',
-                    country: 'India',
-                  },
-                  items: [
-                    {
-                      productId: 'prod-mountain-wanderer-220',
-                      name: 'Mountain Wanderer Traveling T-Shirt',
-                      size: 'L',
-                      color: 'Sunset Orange',
-                      quantity: 1,
-                      price: 799,
-                      printPlacement: 'front',
-                    },
-                  ],
-                  totalAmount: 799,
-                  qikinkOrderId: 'QIK-ORD-960331',
-                  qikinkStatus: 'in_production',
-                  trackingNumber: 'BLUEDART-960334495',
-                  courierName: 'BlueDart Express',
-                  createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-                },
-                {
-                  id: 'ord-102',
-                  orderNumber: 'ANFA-88124',
-                  customerName: currentUser.name,
-                  customerEmail: currentUser.email,
-                  customerPhone: currentUser.phone || '9603344954',
-                  shippingAddress: {
-                    street: currentUser.address || 'Nilofar complex, main road, cloth market',
-                    city: currentUser.city || 'Bhainsa',
-                    state: 'Telangana',
-                    pincode: '504103',
-                    country: 'India',
-                  },
-                  items: [
-                    {
-                      productId: 'prod-tokyo-heavy-240',
-                      name: 'Tokyo Neon Underground Heavyweight Tee',
-                      size: 'XL',
-                      color: 'Pitch Black',
-                      quantity: 1,
-                      price: 899,
-                      printPlacement: 'front',
-                    },
-                  ],
-                  totalAmount: 899,
-                  qikinkOrderId: 'QIK-ORD-881240',
-                  qikinkStatus: 'delivered',
-                  trackingNumber: 'DELHIVERY-88124096',
-                  courierName: 'Delhivery Surface',
-                  createdAt: new Date(Date.now() - 86400000 * 12).toISOString(),
-                },
-              ]);
             }
-
             if (res.returns) {
               setCustomerReturns(res.returns);
             }
@@ -183,25 +132,63 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Step 1: Send OTP handler
-  const handleSendOtp = (e: React.FormEvent) => {
+  // Step 1: Send OTP handler (Real SMS)
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
+    setAuthNotice('');
     const clean = normalizePhone(inputPhone);
     if (!clean || clean.length < 10) {
-      setAuthError('Please enter a valid 10-digit mobile number.');
+      setAuthError('Please enter a valid 10-digit Indian mobile number.');
       return;
     }
-    setAuthStep('otp');
-    setInputOtp('960334'); // Pre-fill test OTP for instantaneous test flow
+
+    setIsSendingOtp(true);
+    try {
+      const res = await sendCustomerOtp(clean);
+      if (res.success) {
+        setAuthStep('otp');
+        setInputOtp('');
+        setOtpTimer(30);
+        setAuthNotice(`Verification code sent to +91 ${clean}`);
+      } else {
+        setAuthError(res.error || 'Failed to send OTP. Please try again.');
+      }
+    } catch {
+      setAuthStep('otp');
+      setInputOtp('');
+      setOtpTimer(30);
+    } finally {
+      setIsSendingOtp(false);
+    }
   };
 
-  // Step 2: Verify OTP & Log In / Sign Up (Meesho Style)
+  // Resend OTP
+  const handleResendOtp = async () => {
+    if (otpTimer > 0) return;
+    setAuthError('');
+    setAuthNotice('');
+    setIsSendingOtp(true);
+    try {
+      const res = await sendCustomerOtp(inputPhone);
+      if (res.success) {
+        setOtpTimer(30);
+        setAuthNotice(`New OTP sent to +91 ${normalizePhone(inputPhone)}`);
+      } else {
+        setAuthError(res.error || 'Failed to resend OTP.');
+      }
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  // Step 2: Verify OTP & Log In / Sign Up
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
+    setAuthNotice('');
     if (!inputOtp || inputOtp.length < 4) {
-      setAuthError('Please enter the 6-digit OTP code.');
+      setAuthError('Please enter the 6-digit OTP code sent to your phone.');
       return;
     }
 
@@ -210,7 +197,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       const authRes = await authenticateCustomerWithMobile(
         inputPhone,
         inputOtp,
-        inputName || 'Abdul Raheem',
+        inputName || 'Valued Customer',
         `${normalizePhone(inputPhone)}@anfaprintwear.in`,
         'Nilofar complex, main road, cloth market',
         'Bhainsa, Telangana, 504103'
@@ -220,41 +207,20 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         onAddNewUser(authRes.userProfile);
         setActiveSubpoint('main');
         setAuthStep('phone');
+        setInputOtp('');
         logCustomerAuthEvent({
           userId: authRes.userProfile.id,
           userEmail: authRes.userProfile.email || `${normalizePhone(inputPhone)}@anfaprintwear.in`,
           userName: authRes.userProfile.name,
           eventType: 'login',
           status: 'success',
-          details: `Logged in via 10-digit mobile number +91 ${normalizePhone(inputPhone)}`,
+          details: `Customer logged in via mobile +91 ${normalizePhone(inputPhone)}`,
         });
       } else {
-        setAuthError(authRes.error || 'Verification failed. Please try again.');
+        setAuthError(authRes.error || 'Verification failed. Please check the OTP and try again.');
       }
     } catch {
-      setAuthError('Unable to connect to server. Logging in via offline mode.');
-      // Local fallback
-      const clean = normalizePhone(inputPhone);
-      const fallbackUser: UserProfile = {
-        id: `cust-${clean}`,
-        name: inputName || 'Abdul Raheem',
-        email: `${clean}@anfaprintwear.in`,
-        phone: clean,
-        address: 'Nilofar complex, main road, cloth market',
-        city: 'Bhainsa, Telangana, 504103',
-        country: 'India',
-      };
-      onAddNewUser(fallbackUser);
-      setActiveSubpoint('main');
-      setAuthStep('phone');
-      logCustomerAuthEvent({
-        userId: fallbackUser.id,
-        userEmail: fallbackUser.email,
-        userName: fallbackUser.name,
-        eventType: 'login',
-        status: 'success',
-        details: `Logged in via mobile offline cache +91 ${clean}`,
-      });
+      setAuthError('Unable to connect to server. Please try again.');
     } finally {
       setIsAuthLoading(false);
     }
@@ -410,9 +376,16 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               </div>
             </div>
 
+            {authNotice && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center space-x-2 animate-fade-in">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{authNotice}</span>
+              </div>
+            )}
+
             {authError && (
-              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center space-x-2">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center space-x-2 animate-fade-in">
+                <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
                 <span>{authError}</span>
               </div>
             )}
@@ -433,36 +406,43 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                       maxLength={10}
                       value={inputPhone}
                       onChange={(e) => setInputPhone(e.target.value.replace(/\D/g, ''))}
-                      placeholder="9603344954"
+                      placeholder="Enter 10-digit number"
                       className="w-full pl-24 pr-4 py-3 text-base font-bold text-neutral-900 border-2 border-neutral-300 rounded-xl focus:border-amber-500 focus:outline-none transition"
                       autoFocus
                     />
                   </div>
                   <p className="text-[11px] text-neutral-500 mt-1.5 flex items-center space-x-1">
                     <span>💡</span>
-                    <span>Single account per phone number. Your orders & address are automatically saved.</span>
+                    <span>An SMS verification OTP will be sent to your mobile number.</span>
                   </p>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5">
-                    Profile Name <span className="text-neutral-400 font-normal">(Full Name or Brand Name)</span>
+                    Profile Name <span className="text-neutral-400 font-normal">(Optional)</span>
                   </label>
                   <input
                     type="text"
                     value={inputName}
                     onChange={(e) => setInputName(e.target.value)}
-                    placeholder="e.g. Abdul Raheem"
+                    placeholder="Enter your name"
                     className="w-full px-4 py-2.5 text-sm border border-neutral-300 rounded-xl focus:border-amber-500 focus:outline-none transition"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-3 bg-amber-400 hover:bg-amber-500 text-black font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center space-x-2"
+                  disabled={isSendingOtp || inputPhone.length < 10}
+                  className="w-full py-3 bg-amber-400 hover:bg-amber-500 disabled:bg-neutral-200 disabled:text-neutral-400 text-black font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center space-x-2"
                 >
-                  <span>CONTINUE WITH OTP</span>
-                  <ChevronRight className="w-4 h-4" />
+                  {isSendingOtp ? (
+                    <span>Sending OTP SMS...</span>
+                  ) : (
+                    <>
+                      <span>CONTINUE WITH OTP</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </>
+                  )}
                 </button>
 
                 <p className="text-center text-[11px] text-neutral-400">
@@ -478,14 +458,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     </label>
                     <button
                       type="button"
-                      onClick={() => setAuthStep('phone')}
+                      onClick={() => {
+                        setAuthStep('phone');
+                        setAuthError('');
+                        setAuthNotice('');
+                      }}
                       className="text-xs font-bold text-amber-600 hover:underline"
                     >
                       Change Number
                     </button>
                   </div>
                   <p className="text-xs text-neutral-500 mb-3">
-                    OTP sent to <span className="font-bold text-neutral-800">+91 {inputPhone}</span>
+                    Verification code sent to <span className="font-bold text-neutral-800">+91 {inputPhone}</span>
                   </p>
 
                   <input
@@ -493,30 +477,35 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     maxLength={6}
                     value={inputOtp}
                     onChange={(e) => setInputOtp(e.target.value.replace(/\D/g, ''))}
-                    placeholder="960334"
+                    placeholder="• • • • • •"
                     className="w-full tracking-widest text-center text-2xl font-black py-3 border-2 border-amber-400 rounded-xl focus:outline-none bg-amber-50/50"
                     autoFocus
                   />
                 </div>
 
-                <div className="bg-neutral-100 rounded-xl p-3 flex items-center justify-between text-xs">
-                  <span className="text-neutral-600">Testing Mode Auto-Fill:</span>
-                  <button
-                    type="button"
-                    onClick={() => setInputOtp('960334')}
-                    className="font-bold text-amber-700 bg-amber-200/80 hover:bg-amber-300 px-2.5 py-1 rounded-lg transition"
-                  >
-                    Use OTP: 960334
-                  </button>
+                <div className="flex items-center justify-between text-xs text-neutral-500 px-1">
+                  <span>Didn't receive the SMS code?</span>
+                  {otpTimer > 0 ? (
+                    <span className="font-medium text-neutral-400">Resend in {otpTimer}s</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleResendOtp}
+                      disabled={isSendingOtp}
+                      className="font-bold text-amber-600 hover:text-amber-700 hover:underline"
+                    >
+                      Resend OTP
+                    </button>
+                  )}
                 </div>
 
                 <button
                   type="submit"
-                  disabled={isAuthLoading}
-                  className="w-full py-3 bg-neutral-900 hover:bg-black text-white font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center space-x-2"
+                  disabled={isAuthLoading || inputOtp.length < 4}
+                  className="w-full py-3 bg-neutral-900 hover:bg-black disabled:bg-neutral-300 text-white font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center space-x-2"
                 >
                   {isAuthLoading ? (
-                    <span>Verifying...</span>
+                    <span>Verifying Code...</span>
                   ) : (
                     <>
                       <ShieldCheck className="w-4 h-4 text-emerald-400" />
