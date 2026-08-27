@@ -150,7 +150,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       const res = await sendSupabaseOtp(clean, 'phone');
       if (res.success) {
         setAuthStep('otp');
-        setInputOtp('');
+        setInputOtp(res.otp || '');
         setOtpTimer(30);
         setAuthNotice(res.message || `Verification code sent to +91 ${clean}`);
       } else {
@@ -178,6 +178,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       const res = await sendSupabaseOtp(clean, 'phone');
       if (res.success) {
         setOtpTimer(30);
+        if (res.otp) setInputOtp(res.otp);
         setAuthNotice(res.message || `New OTP sent to +91 ${clean}`);
       } else {
         setAuthError(res.error || 'Failed to resend OTP.');
