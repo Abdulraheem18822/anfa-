@@ -1477,9 +1477,50 @@ app.post('/api/custom-designs', async (req: Request, res: Response) => {
 });
 
 // ==========================================
-// 5A-2. ORDER NOTIFICATION WEBHOOK / API ROUTE (/api/orders/notify)
-// Sends email alert to merchant on new order insertion
+// 5A-2. ORDER RECORDING & NOTIFICATION WEBHOOKS
 // ==========================================
+app.post('/api/orders/record', async (req: Request, res: Response) => {
+  try {
+    const { orderId, orderNumber, customerId, customerName, customerEmail, customerPhone, items, totalAmount, shippingAddress, customMockupUrl } = req.body;
+    const generatedId = orderId || `ord-${Date.now()}`;
+    const generatedNum = orderNumber || `ANFA-${Math.floor(100000 + Math.random() * 900000)}`;
+
+    const newOrder: ServerOrder = {
+      id: generatedId,
+      orderNumber: generatedNum,
+      customerId: customerId || 'guest_user',
+      customerName: customerName || 'Valued Customer',
+      customerEmail: customerEmail || 'anfa.store01@gmail.com',
+      customerPhone: customerPhone || '9603344954',
+      shippingAddress: typeof shippingAddress === 'string' ? {
+        street: shippingAddress,
+        city: 'Bhainsa',
+        state: 'Telangana',
+        pincode: '504103',
+        country: 'India'
+      } : shippingAddress,
+      items: Array.isArray(items) ? items : [items],
+      totalAmount: Number(totalAmount || 799),
+      qikinkOrderId: `QIK-${Math.floor(1000000 + Math.random() * 9000000)}`,
+      qikinkStatus: 'pending_fulfillment',
+      trackingNumber: `DEL-${Math.floor(100000000 + Math.random() * 900000000)}`,
+      courierName: 'Delhivery Surface Express',
+      createdAt: new Date().toISOString(),
+    };
+
+    ordersCache.unshift(newOrder);
+
+    res.status(200).json({
+      success: true,
+      order: newOrder,
+      orderId: generatedId,
+      orderNumber: generatedNum,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Failed to record order' });
+  }
+});
+
 app.post('/api/orders/notify', async (req: Request, res: Response) => {
   try {
     const { orderId, orderNumber, customerName, customerEmail, customerPhone, items, totalAmount, shippingAddress, customMockupUrl } = req.body;
