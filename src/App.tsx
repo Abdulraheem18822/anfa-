@@ -535,7 +535,7 @@ export default function App() {
             </div>
 
             {/* Interactive Custom POD Studio Callout Banner */}
-            <section className="bg-neutral-900 text-white py-16 px-4 md:px-8 relative overflow-hidden my-8 select-none">
+            <section className="bg-neutral-900 text-white py-12 sm:py-16 px-3.5 sm:px-6 md:px-8 relative overflow-hidden my-8 select-none">
               <div
                 className="absolute inset-0 opacity-10 pointer-events-none"
                 style={{
@@ -544,24 +544,24 @@ export default function App() {
                 }}
               />
 
-              <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-10 relative z-10">
+              <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 items-center justify-between gap-8 lg:gap-12 relative z-10">
                 {/* Left Info */}
-                <div className="max-w-xl text-center lg:text-left space-y-4">
+                <div className="lg:col-span-7 max-w-xl text-center lg:text-left space-y-4 mx-auto lg:mx-0">
                   <div className="inline-flex items-center space-x-2 bg-amber-400/10 border border-amber-400/30 text-amber-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>On-Demand Manufacturing</span>
                   </div>
-                  <h2 className="font-['Oswald'] text-3xl md:text-5xl font-bold uppercase tracking-tight leading-tight">
+                  <h2 className="font-['Oswald'] text-2xl sm:text-3xl md:text-5xl font-bold uppercase tracking-tight leading-tight">
                     CREATE YOUR OWN <span className="text-amber-400">SIGNATURE</span> T-SHIRT
                   </h2>
-                  <p className="text-neutral-300 text-sm md:text-base leading-relaxed">
+                  <p className="text-neutral-300 text-xs sm:text-sm md:text-base leading-relaxed">
                     Upload your custom artwork directly from your device or drive, select your favorite garment color and size, customize your print dimensions, and send your design straight to our DTG production team in Kolkata.
                   </p>
                   <div className="pt-2 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
                     <button
                       id="pod-customizer-banner-btn"
                       onClick={() => setIsPODStudioOpen(true)}
-                      className="w-full sm:w-auto px-8 py-4 bg-amber-400 hover:bg-amber-500 text-black font-['Oswald'] font-bold text-sm tracking-wider uppercase rounded-xl flex items-center justify-center space-x-2 transition shadow-xl active:scale-95"
+                      className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 bg-amber-400 hover:bg-amber-500 text-black font-['Oswald'] font-bold text-xs sm:text-sm tracking-wider uppercase rounded-xl flex items-center justify-center space-x-2 transition shadow-xl active:scale-95 cursor-pointer"
                     >
                       <Sparkles className="w-4 h-4" />
                       <span>START CUSTOMIZING NOW</span>
@@ -574,22 +574,22 @@ export default function App() {
                 </div>
 
                 {/* Right Interactive Mockup Visual */}
-                <div className="w-full max-w-md bg-neutral-800/80 border border-neutral-700/80 rounded-2xl p-6 shadow-2xl flex flex-col items-center">
-                  <div className="w-64 h-64 relative flex items-center justify-center">
+                <div className="lg:col-span-5 w-full max-w-xs sm:max-w-md mx-auto bg-neutral-800/80 border border-neutral-700/80 rounded-2xl p-4 sm:p-6 shadow-2xl flex flex-col items-center">
+                  <div className="w-48 h-48 xs:w-56 xs:h-56 sm:w-64 sm:h-64 relative flex items-center justify-center mx-auto overflow-hidden">
                     <TShirtMockup
                       shirtColor="#121212"
                       graphicType="graphic-tokyo"
                       customText="ANFA APPAREL"
                       customFont="'Oswald', sans-serif"
                       showShadow={true}
-                      className="w-full h-full"
+                      className="w-full h-full object-contain"
                     />
                   </div>
                   <div className="mt-4 w-full bg-neutral-900 rounded-xl p-3 flex items-center justify-between text-xs text-neutral-300 border border-neutral-700">
-                    <span className="font-semibold text-white">Live DTG Print Preview Engine</span>
+                    <span className="font-semibold text-white truncate mr-2">Live DTG Print Engine</span>
                     <button
                       onClick={() => setIsPODStudioOpen(true)}
-                      className="text-amber-400 hover:text-amber-300 font-bold flex items-center space-x-1"
+                      className="text-amber-400 hover:text-amber-300 font-bold flex items-center space-x-1 whitespace-nowrap"
                     >
                       <span>Open Studio</span>
                       <ArrowRight className="w-3.5 h-3.5" />

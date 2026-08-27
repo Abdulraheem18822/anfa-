@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { TShirtMockup } from './TShirtMockup';
 import { StoreSettings } from '../types/store';
-import { validatePngDesignFile, uploadCustomDesignToSupabase } from '../lib/supabase';
+import { validatePngDesignFile, uploadCustomDesignToSupabase, OrderService } from '../lib/supabase';
 import { dispatchOrderToQikink } from '../lib/qikinkApi';
 
 interface PODStudioModalProps {
@@ -218,7 +218,28 @@ export const PODStudioModal: React.FC<PODStudioModalProps> = ({
         console.warn('Backend custom-designs save notice:', errApi);
       }
 
-      // 2. Automatically dispatch order to Qikink POD manufacturing queue
+      // 2. Insert order directly into Supabase public.orders and trigger merchant alert
+      await OrderService.createOrder({
+        customerName,
+        customerEmail,
+        customerPhone: customerPhone || '9603344954',
+        shippingAddress: 'Nilofar complex, main road, cloth market, Bhainsa, Telangana, 504103',
+        totalAmount: totalPrice,
+        customMockupUrl: uploadedImage || undefined,
+        items: [
+          {
+            name: `Custom DTG Printed Tee - ${selectedColor.name} (${selectedSize})`,
+            size: selectedSize,
+            color: selectedColor.name,
+            quantity: 1,
+            price: totalPrice,
+            printTier: printSizeTier,
+            notes: orderNotes || 'None',
+          },
+        ],
+      }).catch((e) => console.warn('Supabase public.orders insert notice:', e));
+
+      // 3. Automatically dispatch order to Qikink POD manufacturing queue
       const qikinkRes = await dispatchOrderToQikink({
         orderNumber: generatedRef,
         customerId,

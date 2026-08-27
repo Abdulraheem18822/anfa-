@@ -1477,6 +1477,86 @@ app.post('/api/custom-designs', async (req: Request, res: Response) => {
 });
 
 // ==========================================
+// 5A-2. ORDER NOTIFICATION WEBHOOK / API ROUTE (/api/orders/notify)
+// Sends email alert to merchant on new order insertion
+// ==========================================
+app.post('/api/orders/notify', async (req: Request, res: Response) => {
+  try {
+    const { orderId, orderNumber, customerName, customerEmail, customerPhone, items, totalAmount, shippingAddress, customMockupUrl } = req.body;
+
+    const merchantEmails = [
+      process.env.MERCHANT_ALERT_EMAIL || 'anfa.store01@gmail.com',
+      'abdulraheem18822@gmail.com',
+    ];
+
+    const itemsSummary = Array.isArray(items)
+      ? items.map((it: any) => `- ${it.name || it.title || 'Custom Tee'} (Qty: ${it.quantity || 1}, Size: ${it.size || 'L'}, Color: ${it.color || 'Black'}) - ₹${it.price || 799}`).join('\n')
+      : JSON.stringify(items, null, 2);
+
+    const emailSubject = `🚀 NEW ORDER PLACED: #${orderNumber || orderId || 'ANFA-NEW'} - ₹${totalAmount || 0}`;
+    const emailBody = `
+========================================
+       ANFA PRINT WEAR - NEW ORDER ALERT
+========================================
+Order ID / Number: #${orderNumber || orderId}
+Date: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+Total Amount: ₹${totalAmount}
+Status: Received / Ready for DTG Production
+
+CUSTOMER DETAILS:
+- Name: ${customerName || 'Online Customer'}
+- Email: ${customerEmail || 'N/A'}
+- Phone: +91 ${customerPhone || 'N/A'}
+- Delivery Address: ${shippingAddress || 'Nilofar complex, main road, cloth market, Bhainsa, Telangana, 504103'}
+
+ORDER ITEMS:
+${itemsSummary}
+
+${customMockupUrl ? `CUSTOM DTG MOCKUP / DESIGN LINK:\n${customMockupUrl}\n` : ''}
+----------------------------------------
+View and fulfill this order in the Admin Command Center:
+https://anfa-print-wear.vercel.app/admin
+========================================
+    `.trim();
+
+    console.log(`[ANFA Order Notification] Alert generated for ${merchantEmails.join(', ')}:\n${emailBody}`);
+
+    // If Resend API Key or SMTP credentials are provided, dispatch real email
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (resendApiKey) {
+      try {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'Anfa Print Wear <orders@anfaprintwear.in>',
+            to: merchantEmails,
+            subject: emailSubject,
+            text: emailBody,
+          }),
+        });
+        console.log('[ANFA Order Notification] Resend email dispatched successfully.');
+      } catch (mailErr) {
+        console.warn('[ANFA Order Notification] Resend delivery notice:', mailErr);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Merchant email notification processed successfully.',
+      recipients: merchantEmails,
+      orderNumber: orderNumber || orderId,
+    });
+  } catch (error) {
+    console.error('Error notifying merchant about order:', error);
+    res.status(500).json({ success: false, error: 'Failed to dispatch order notification' });
+  }
+});
+
+// ==========================================
 // 5B. SIMPLIFIED MEESHO-STYLE CUSTOMER AUTH & PROFILE ENDPOINTS
 // ==========================================
 

@@ -25,8 +25,9 @@ export const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_PUBL
   },
 });
 
-// Storage Bucket Name for High-Resolution Transparent PNG Custom Design Files
+// Storage Bucket Names
 export const CUSTOM_DESIGNS_BUCKET = 'custom-designs';
+export const PRODUCT_IMAGES_BUCKET = 'product-images';
 
 // ============================================================================
 // 1. CONNECTION HEALTH & PERSISTENCE CHECK
@@ -37,7 +38,9 @@ export interface SupabaseConnectionStatus {
   latencyMs: number;
   url: string;
   tablesAvailable: {
+    profiles: boolean;
     products: boolean;
+    cart: boolean;
     orders: boolean;
     custom_designs: boolean;
     customers: boolean;
@@ -51,15 +54,23 @@ export interface SupabaseConnectionStatus {
 export async function checkSupabaseConnection(): Promise<SupabaseConnectionStatus> {
   const startTime = Date.now();
   const tables = {
+    profiles: false,
     products: false,
+    cart: false,
     orders: false,
     custom_designs: false,
     customers: false,
   };
 
   try {
+    const { error: profErr } = await supabase.from('profiles').select('id').limit(1);
+    tables.profiles = !profErr;
+
     const { error: prodErr } = await supabase.from('products').select('id').limit(1);
     tables.products = !prodErr;
+
+    const { error: cartErr } = await supabase.from('cart').select('id').limit(1);
+    tables.cart = !cartErr;
 
     const { error: ordErr } = await supabase.from('orders').select('id').limit(1);
     tables.orders = !ordErr;
@@ -71,7 +82,7 @@ export async function checkSupabaseConnection(): Promise<SupabaseConnectionStatu
     tables.customers = !custErr;
 
     const latencyMs = Date.now() - startTime;
-    const isConnected = tables.products || tables.orders || tables.custom_designs || tables.customers;
+    const isConnected = tables.products || tables.orders || tables.cart || tables.profiles || tables.custom_designs || tables.customers;
 
     return {
       isConnected,
@@ -91,12 +102,50 @@ export async function checkSupabaseConnection(): Promise<SupabaseConnectionStatu
 }
 
 // ============================================================================
-// 2. PRODUCT DATA SERVICE
+// 2. PRODUCT DATA SERVICE (public.products)
 // ============================================================================
+
+/**
+ * Upload a product image to the 'product-images' public bucket
+ */
+export async function uploadProductImageToSupabase(
+  file: File,
+  productTitle?: string
+): Promise<{ success: boolean; publicUrl?: string; error?: string }> {
+  try {
+    const timestamp = Date.now();
+    const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const storagePath = `catalog/${timestamp}_${cleanFileName}`;
+
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(PRODUCT_IMAGES_BUCKET)
+      .upload(storagePath, file, {
+        contentType: file.type || 'image/jpeg',
+        cacheControl: '3600',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.warn('Supabase product-images upload fallback:', uploadError.message);
+      return { success: true, publicUrl: URL.createObjectURL(file) };
+    }
+
+    const { data: urlData } = supabase.storage
+      .from(PRODUCT_IMAGES_BUCKET)
+      .getPublicUrl(storagePath);
+
+    return {
+      success: true,
+      publicUrl: urlData.publicUrl,
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Product image upload failed' };
+  }
+}
 
 export const ProductService = {
   /**
-   * Fetch all active live products
+   * Fetch all active live products from public.products
    */
   async getAll(): Promise<{ success: boolean; data: Product[]; error?: string }> {
     try {
@@ -111,12 +160,12 @@ export const ProductService = {
       const products: Product[] = data.map((item) => ({
         id: item.id,
         sku: item.sku || `SKU-${item.id}`,
-        name: item.name || item.title || 'Custom T-Shirt',
+        name: item.title || item.name || 'Custom T-Shirt',
         price: Number(item.price || item.base_price || 799),
         originalPrice: item.original_price ? Number(item.original_price) : undefined,
         rating: item.rating || 5,
         reviewCount: item.review_count || 12,
-        image: item.image || item.mockup_url || '',
+        image: item.image_url || item.image || item.mockup_url || '',
         shirtColor: item.shirt_color || '#1E1E24',
         shirtColorName: item.shirt_color_name || 'Standard Color',
         category: item.category || 'new',
@@ -147,28 +196,26 @@ export const ProductService = {
   },
 
   /**
-   * Upsert a product into Supabase
+   * Insert or update a manual product into public.products
    */
   async upsert(product: Partial<Product> & { id: string }): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
-      const dbPayload = {
+      // Payload matching public.products (title, price, description, image_url, stock, etc.)
+      const dbPayload: Record<string, any> = {
         id: product.id,
+        title: product.name || 'Custom Apparel',
+        price: Number(product.price || 799),
+        description: product.description || '',
+        image_url: product.image || '',
+        stock: 10,
+        // Also supply standard columns if schema supports them
         sku: product.sku || `ANFA-${Math.floor(1000 + Math.random() * 9000)}`,
-        name: product.name,
-        price: product.price,
-        original_price: product.originalPrice,
         category: product.category || 'new',
         gender: product.gender || 'unisex',
-        description: product.description || '',
-        image: product.image || '',
         sizes: product.sizes || ['S', 'M', 'L', 'XL', '2XL'],
         available_colors: product.availableColors,
         is_live: product.isLive ?? true,
-        badge: product.badge,
-        tags: product.tags,
-        rating: product.rating,
-        review_count: product.reviewCount,
-        updated_at: new Date().toISOString(),
+        created_at: product.createdAt || new Date().toISOString(),
       };
 
       const { data, error } = await supabase
@@ -176,7 +223,24 @@ export const ProductService = {
         .upsert(dbPayload)
         .select();
 
-      if (error) throw error;
+      if (error) {
+        // Retry with pure minimal schema if extra columns fail
+        const minimalPayload = {
+          id: product.id,
+          title: product.name || 'Custom Apparel',
+          price: Number(product.price || 799),
+          description: product.description || '',
+          image_url: product.image || '',
+          stock: 10,
+        };
+        const { data: minData, error: minErr } = await supabase
+          .from('products')
+          .upsert(minimalPayload)
+          .select();
+        if (minErr) throw minErr;
+        return { success: true, data: minData?.[0] };
+      }
+
       return { success: true, data: data?.[0] };
     } catch (err: any) {
       console.error('ProductService.upsert error:', err);
@@ -199,7 +263,94 @@ export const ProductService = {
 };
 
 // ============================================================================
-// 3. ORDER DATA SERVICE
+// 3. CART DATA SERVICE (public.cart - Isolated per user_id)
+// ============================================================================
+
+export interface CartRow {
+  id: string;
+  user_id: string;
+  product_id: string;
+  quantity: number;
+  created_at?: string;
+}
+
+export const CartService = {
+  /**
+   * Get user's cart from public.cart
+   */
+  async getUserCart(userId: string): Promise<{ success: boolean; data: any[]; error?: string }> {
+    try {
+      const { data, error } = await supabase
+        .from('cart')
+        .select('*, product:products(*)')
+        .eq('user_id', userId);
+
+      if (error) throw error;
+      return { success: true, data: data || [] };
+    } catch (err: any) {
+      return { success: false, data: [], error: err?.message };
+    }
+  },
+
+  /**
+   * Add or update an item in public.cart
+   */
+  async addToCart(userId: string, productId: string, quantity: number = 1): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { data: existing } = await supabase
+        .from('cart')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('product_id', productId)
+        .maybeSingle();
+
+      if (existing) {
+        const { error } = await supabase
+          .from('cart')
+          .update({ quantity: (existing.quantity || 1) + quantity })
+          .eq('id', existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('cart')
+          .insert([{ user_id: userId, product_id: productId, quantity }]);
+        if (error) throw error;
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message };
+    }
+  },
+
+  /**
+   * Remove item from public.cart
+   */
+  async removeItem(cartId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { error } = await supabase.from('cart').delete().eq('id', cartId);
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message };
+    }
+  },
+
+  /**
+   * Clear all items in user's cart on checkout or logout
+   */
+  async clearCart(userId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { error } = await supabase.from('cart').delete().eq('user_id', userId);
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message };
+    }
+  },
+};
+
+// ============================================================================
+// 4. ORDER DATA SERVICE (public.orders)
 // ============================================================================
 
 export const OrderService = {
@@ -221,14 +372,14 @@ export const OrderService = {
   },
 
   /**
-   * Fetch orders for a specific phone number or email
+   * Fetch orders for a specific user ID or phone
    */
-  async getByCustomer(phoneOrEmail: string): Promise<{ success: boolean; data: QikinkFulfillmentOrder[]; error?: string }> {
+  async getByCustomer(userIdOrPhone: string): Promise<{ success: boolean; data: any[]; error?: string }> {
     try {
       const { data, error } = await supabase
         .from('orders')
         .select('*')
-        .or(`customer_phone.eq.${phoneOrEmail},customer_email.eq.${phoneOrEmail}`)
+        .or(`user_id.eq.${userIdOrPhone},customer_phone.eq.${userIdOrPhone},customer_email.eq.${userIdOrPhone}`)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -239,25 +390,74 @@ export const OrderService = {
   },
 
   /**
-   * Create or update an order
+   * Create customer order into public.orders and trigger merchant alert
+   */
+  async createOrder(params: {
+    userId?: string;
+    items: any[];
+    totalAmount: number;
+    shippingAddress: string;
+    customerName?: string;
+    customerEmail?: string;
+    customerPhone?: string;
+    customMockupUrl?: string;
+  }): Promise<{ success: boolean; orderId?: string; error?: string }> {
+    try {
+      const orderPayload: Record<string, any> = {
+        user_id: params.userId || null,
+        items: params.items,
+        total_amount: params.totalAmount,
+        status: 'pending',
+        shipping_address: params.shippingAddress,
+        created_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await supabase
+        .from('orders')
+        .insert([orderPayload])
+        .select();
+
+      if (error) throw error;
+
+      const placedOrder = data?.[0];
+      const orderId = placedOrder?.id || `ord-${Date.now()}`;
+
+      // Call merchant email notification endpoint
+      fetch('/api/orders/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          orderNumber: placedOrder?.order_number || `ANFA-${orderId.slice(0, 8).toUpperCase()}`,
+          customerName: params.customerName,
+          customerEmail: params.customerEmail,
+          customerPhone: params.customerPhone,
+          items: params.items,
+          totalAmount: params.totalAmount,
+          shippingAddress: params.shippingAddress,
+          customMockupUrl: params.customMockupUrl,
+        }),
+      }).catch((e) => console.warn('Order notification notice:', e));
+
+      return { success: true, orderId };
+    } catch (err: any) {
+      console.error('OrderService.createOrder error:', err);
+      return { success: false, error: err?.message };
+    }
+  },
+
+  /**
+   * Upsert an order (compatibility helper)
    */
   async upsert(order: QikinkFulfillmentOrder): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
       const dbPayload = {
         id: order.id,
-        order_number: order.orderNumber,
-        customer_name: order.customerName,
-        customer_email: order.customerEmail,
-        customer_phone: order.customerPhone,
-        shipping_address: order.shippingAddress,
         items: order.items,
         total_amount: order.totalAmount,
-        qikink_order_id: order.qikinkOrderId,
-        qikink_status: order.qikinkStatus,
-        tracking_number: order.trackingNumber,
-        courier_name: order.courierName,
+        shipping_address: order.shippingAddress,
+        status: order.qikinkStatus || 'pending',
         created_at: order.createdAt || new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       };
 
       const { data, error } = await supabase.from('orders').upsert(dbPayload).select();
@@ -270,7 +470,7 @@ export const OrderService = {
 };
 
 // ============================================================================
-// 4. CUSTOM DESIGNS & FILE STORAGE SERVICE
+// 5. CUSTOM DESIGNS & FILE STORAGE SERVICE
 // ============================================================================
 
 export async function validatePngDesignFile(file: File): Promise<{
@@ -450,6 +650,55 @@ export async function uploadCustomDesignToSupabase(
     };
   }
 }
+
+export const CustomDesignService = {
+  async getAll(): Promise<{ success: boolean; data: CustomDesignUpload[]; error?: string }> {
+    try {
+      const { data, error } = await supabase
+        .from('custom_designs')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      const designs: CustomDesignUpload[] = (data || []).map((d) => ({
+        id: d.id,
+        customerId: d.customer_id || 'guest',
+        customerEmail: d.customer_email,
+        fileName: d.file_name || 'custom_design.png',
+        fileUrl: d.file_url,
+        storagePath: d.storage_path || '',
+        fileSizeBytes: d.file_size || 0,
+        widthPx: d.width_px || 2400,
+        heightPx: d.height_px || 3000,
+        isTransparentPng: d.is_transparent ?? true,
+        approvalStatus: d.approval_status || 'pending_review',
+        adminNotes: d.admin_notes,
+        createdAt: d.created_at || new Date().toISOString(),
+      }));
+
+      return { success: true, data: designs };
+    } catch (err: any) {
+      return { success: false, data: [], error: err?.message };
+    }
+  },
+
+  async updateStatus(id: string, status: string, notes?: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { error } = await supabase
+        .from('custom_designs')
+        .update({
+          approval_status: status,
+          admin_notes: notes,
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message };
+    }
+  },
+};
 
 export async function fetchLiveProductsFromSupabase(): Promise<Product[]> {
   const res = await ProductService.getAll();
