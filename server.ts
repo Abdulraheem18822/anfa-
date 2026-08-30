@@ -962,6 +962,97 @@ app.put('/api/products/:id', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/products - Create a new product in catalog and Supabase
+app.post('/api/products', async (req: Request, res: Response) => {
+  try {
+    const p = req.body;
+    const newProduct: ServerProduct = {
+      id: p.id || `prod-${Date.now()}`,
+      sku: p.sku || `SKU-${Math.floor(1000 + Math.random() * 9000)}`,
+      name: p.name || p.title || 'New T-Shirt Design',
+      price: Number(p.price || 799),
+      originalPrice: p.originalPrice ? Number(p.originalPrice) : undefined,
+      rating: 5,
+      reviewCount: 0,
+      image: p.image || p.imageUrl || '',
+      shirtColor: p.shirtColor || '#1E1E24',
+      shirtColorName: p.shirtColorName || 'Pitch Black',
+      category: p.category || 'new',
+      gender: p.gender || 'unisex',
+      badge: p.badge || undefined,
+      description: p.description || '',
+      sizes: p.sizes || ['S', 'M', 'L', 'XL', '2XL'],
+      availableColors: p.availableColors || [
+        { name: 'Pitch Black', hex: '#1E1E24' },
+        { name: 'Pure White', hex: '#FFFFFF' },
+      ],
+      graphicType: p.graphicType || 'custom',
+      graphicUrl: p.graphicUrl,
+      isGlowInDark: p.isGlowInDark || false,
+      isLive: p.isLive ?? true,
+      qikinkProductId: p.qikinkProductId,
+      tags: p.tags || ['custom-tee'],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Add to in-memory server cache
+    productsCache.unshift(newProduct);
+
+    // Persist to Supabase products table
+    try {
+      await supabase.from('products').upsert({
+        id: newProduct.id,
+        sku: newProduct.sku,
+        name: newProduct.name,
+        price: newProduct.price,
+        original_price: newProduct.originalPrice,
+        category: newProduct.category,
+        gender: newProduct.gender,
+        description: newProduct.description,
+        image: newProduct.image,
+        sizes: newProduct.sizes,
+        available_colors: newProduct.availableColors,
+        is_live: newProduct.isLive,
+        tags: newProduct.tags,
+        created_at: newProduct.createdAt,
+        updated_at: newProduct.updatedAt,
+      });
+    } catch (dbErr) {
+      console.warn('Supabase product creation notice:', dbErr);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: `Product [${newProduct.name}] created and published.`,
+      product: newProduct,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to create product' });
+  }
+});
+
+// DELETE /api/products/:id - Delete product from catalog and Supabase
+app.delete('/api/products/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const index = productsCache.findIndex((p) => p.id === id);
+    if (index > -1) {
+      productsCache.splice(index, 1);
+    }
+
+    try {
+      await supabase.from('products').delete().eq('id', id);
+    } catch (dbErr) {
+      console.warn('Supabase product deletion notice:', dbErr);
+    }
+
+    res.json({ success: true, message: `Product ${id} deleted successfully.` });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to delete product' });
+  }
+});
+
 // POST /api/products/simulate-qikink-push - Manual simulator to test Qikink webhook pushes
 app.post('/api/products/simulate-qikink-push', (req: Request, res: Response) => {
   const { title, category, basePrice, retailPrice, colors, sizes, mockupUrl, printArea } = req.body;
