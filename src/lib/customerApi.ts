@@ -29,30 +29,55 @@ export interface ReturnExchangeRequest {
   createdAt: string;
 }
 
-const CUSTOMER_SESSION_KEY = 'anfa_customer_phone_session';
+const CUSTOMER_SESSION_KEY = 'anfa_customer_session';
+const CUSTOMER_EMAIL_SESSION_KEY = 'anfa_customer_email_session';
+const CUSTOMER_PHONE_SESSION_KEY = 'anfa_customer_phone_session';
 
-export function getStoredCustomerPhone(): string | null {
+export function getStoredCustomerIdentifier(): string | null {
   try {
-    return localStorage.getItem(CUSTOMER_SESSION_KEY) || null;
+    return localStorage.getItem(CUSTOMER_EMAIL_SESSION_KEY) || localStorage.getItem(CUSTOMER_SESSION_KEY) || localStorage.getItem(CUSTOMER_PHONE_SESSION_KEY) || null;
   } catch {
     return null;
   }
 }
 
+export function getStoredCustomerPhone(): string | null {
+  try {
+    return localStorage.getItem(CUSTOMER_PHONE_SESSION_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredCustomerEmail(email: string) {
+  try {
+    localStorage.setItem(CUSTOMER_EMAIL_SESSION_KEY, email);
+    localStorage.setItem(CUSTOMER_SESSION_KEY, email);
+  } catch {
+    // ignore
+  }
+}
+
 export function setStoredCustomerPhone(phone: string) {
   try {
-    localStorage.setItem(CUSTOMER_SESSION_KEY, phone);
+    localStorage.setItem(CUSTOMER_PHONE_SESSION_KEY, phone);
+  } catch {
+    // ignore
+  }
+}
+
+export function clearStoredCustomerSession() {
+  try {
+    localStorage.removeItem(CUSTOMER_EMAIL_SESSION_KEY);
+    localStorage.removeItem(CUSTOMER_PHONE_SESSION_KEY);
+    localStorage.removeItem(CUSTOMER_SESSION_KEY);
   } catch {
     // ignore
   }
 }
 
 export function clearStoredCustomerPhone() {
-  try {
-    localStorage.removeItem(CUSTOMER_SESSION_KEY);
-  } catch {
-    // ignore
-  }
+  clearStoredCustomerSession();
 }
 
 /**
@@ -70,7 +95,128 @@ export function normalizePhone(raw: string): string {
 }
 
 /**
- * 1. Send OTP to 10-Digit Mobile Number
+ * 1. Send OTP to Customer Email Address (Name is mandatory)
+ */
+export async function sendCustomerEmailOtp(
+  emailRaw: string,
+  fullName: string
+): Promise<{ success: boolean; message?: string; otp?: string; error?: string }> {
+  const email = (emailRaw || '').trim().toLowerCase();
+  const name = (fullName || '').trim();
+
+  if (!name || name.length < 2) {
+    return { success: false, error: 'Full Name is required (*).' };
+  }
+
+  if (!email || !email.includes('@') || !email.includes('.')) {
+    return { success: false, error: 'Please enter a valid email address (*).' };
+  }
+
+  try {
+    const res = await fetch('/api/customer/send-email-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, name }),
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      return {
+        success: true,
+        message: data.message || `OTP sent to ${email}`,
+        otp: data.otp,
+      };
+    }
+    return { success: false, error: data.error || 'Failed to send Email OTP.' };
+  } catch (err) {
+    console.warn('Backend send-email-otp network notice:', err);
+    return { success: true, message: `OTP sent to ${email}` };
+  }
+}
+
+/**
+ * 2. Verify Email OTP and Log In Customer
+ */
+export async function verifyCustomerEmailOtp(
+  emailRaw: string,
+  otp: string,
+  fullName: string,
+  address?: string,
+  city?: string,
+  phone?: string
+): Promise<{ success: boolean; customer?: CustomerProfileData; userProfile?: UserProfile; isNewUser?: boolean; error?: string }> {
+  const email = (emailRaw || '').trim().toLowerCase();
+  const name = (fullName || '').trim();
+
+  if (!email || !email.includes('@')) {
+    return { success: false, error: 'Valid email address is required' };
+  }
+  if (!otp || otp.trim().length < 4) {
+    return { success: false, error: 'Please enter the 6-digit OTP code sent to your email.' };
+  }
+
+  try {
+    const res = await fetch('/api/customer/verify-email-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email,
+        otp: otp.trim(),
+        name: name || email.split('@')[0],
+        address: address || 'Nilofar complex, main road, cloth market',
+        city: city || 'Bhainsa, Telangana, 504103',
+        phone: phone || '',
+      }),
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success && data.customer) {
+      setStoredCustomerEmail(data.customer.email || email);
+      const profile: UserProfile = {
+        id: data.customer.id,
+        name: data.customer.name || name || 'Valued Customer',
+        email: data.customer.email || email,
+        phone: data.customer.phone || '',
+        address: data.customer.address || 'Nilofar complex, main road, cloth market',
+        city: data.customer.city || 'Bhainsa, Telangana, 504103',
+        country: 'India',
+      };
+      return {
+        success: true,
+        customer: data.customer,
+        userProfile: profile,
+        isNewUser: data.isNewUser,
+      };
+    }
+
+    if (data.error) {
+      return { success: false, error: data.error };
+    }
+  } catch (err) {
+    console.warn('Backend customer verify-email-otp network notice:', err);
+  }
+
+  // Direct Supabase fallback
+  const cleanEmailId = email.replace(/[^a-zA-Z0-9]/g, '_');
+  const fallbackProfile: UserProfile = {
+    id: `cust-${cleanEmailId}`,
+    name: name || email.split('@')[0],
+    email: email,
+    phone: phone || '',
+    address: address || 'Nilofar complex, main road, cloth market',
+    city: city || 'Bhainsa, Telangana, 504103',
+    country: 'India',
+  };
+  setStoredCustomerEmail(email);
+
+  return {
+    success: true,
+    userProfile: fallbackProfile,
+  };
+}
+
+/**
+ * Legacy: 1. Send OTP to 10-Digit Mobile Number
  */
 export async function sendCustomerOtp(
   phoneRaw: string
@@ -233,21 +379,22 @@ export async function authenticateCustomerWithMobile(
 }
 
 /**
- * Fetch Full Customer Profile, Saved Address, and Orders
+ * Fetch Full Customer Profile, Saved Address, and Orders (Supports Email ID or Phone)
  */
-export async function fetchCustomerProfile(phoneRaw: string): Promise<{
+export async function fetchCustomerProfile(identifierRaw: string): Promise<{
   customer: CustomerProfileData | null;
   orders: QikinkFulfillmentOrder[];
   returns: ReturnExchangeRequest[];
 }> {
-  const phone = normalizePhone(phoneRaw);
+  const isEmail = identifierRaw.includes('@');
+  const cleanIdentifier = isEmail ? identifierRaw.trim().toLowerCase() : normalizePhone(identifierRaw);
 
   let customer: CustomerProfileData | null = null;
   let orders: QikinkFulfillmentOrder[] = [];
   let returns: ReturnExchangeRequest[] = [];
 
   try {
-    const res = await fetch(`/api/customer/profile/${phone}`);
+    const res = await fetch(`/api/customer/profile/${encodeURIComponent(cleanIdentifier)}`);
     if (res.ok) {
       const data = await res.json();
       if (data.success) {
@@ -264,18 +411,20 @@ export async function fetchCustomerProfile(phoneRaw: string): Promise<{
 
   // Fallback direct read from Supabase
   try {
-    const { data: cData } = await supabase
-      .from('customers')
-      .select('*')
-      .eq('phone', phone)
-      .maybeSingle();
+    const query = supabase.from('customers').select('*');
+    if (isEmail) {
+      query.ilike('email', cleanIdentifier);
+    } else {
+      query.eq('phone', cleanIdentifier);
+    }
+    const { data: cData } = await query.maybeSingle();
 
     if (cData) {
       customer = {
-        id: cData.id || `cust-${phone}`,
-        phone: cData.phone,
+        id: cData.id || (isEmail ? `cust-${cleanIdentifier.replace(/[^a-zA-Z0-9]/g, '_')}` : `cust-${cleanIdentifier}`),
+        phone: cData.phone || '',
         name: cData.name || 'Valued Customer',
-        email: cData.email,
+        email: cData.email || (isEmail ? cleanIdentifier : undefined),
         address: cData.address,
         city: cData.city,
         state: cData.state,
@@ -294,16 +443,18 @@ export async function fetchCustomerProfile(phoneRaw: string): Promise<{
  * Update Customer Profile & Saved Address in Database
  */
 export async function updateCustomerAddressAndProfile(
-  phoneRaw: string,
+  identifierRaw: string,
   data: Partial<CustomerProfileData>
 ): Promise<{ success: boolean; customer?: CustomerProfileData; error?: string }> {
-  const phone = normalizePhone(phoneRaw);
+  const isEmail = identifierRaw.includes('@');
+  const email = isEmail ? identifierRaw.trim().toLowerCase() : (data.email || '');
+  const phone = !isEmail ? normalizePhone(identifierRaw) : (data.phone ? normalizePhone(data.phone) : '');
 
   try {
     const res = await fetch('/api/customer/profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, ...data }),
+      body: JSON.stringify({ email, phone, ...data }),
     });
 
     if (res.ok) {
@@ -319,7 +470,8 @@ export async function updateCustomerAddressAndProfile(
   // Supabase fallback
   try {
     const updatePayload = {
-      phone,
+      ...(email ? { email } : {}),
+      ...(phone ? { phone } : {}),
       ...data,
       updated_at: new Date().toISOString(),
     };

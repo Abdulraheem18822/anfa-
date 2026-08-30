@@ -3,6 +3,7 @@ import {
   X,
   User,
   Phone,
+  Mail,
   MapPin,
   Check,
   Package,
@@ -22,6 +23,8 @@ import {
 import { UserProfile, StoreSettings, QikinkFulfillmentOrder } from '../types/store';
 import {
   authenticateCustomerWithMobile,
+  sendCustomerEmailOtp,
+  verifyCustomerEmailOtp,
   sendCustomerOtp,
   verifyCustomerOtp,
   fetchCustomerProfile,
@@ -29,6 +32,7 @@ import {
   submitReturnExchange,
   ReturnExchangeRequest,
   normalizePhone,
+  setStoredCustomerEmail,
 } from '../lib/customerApi';
 import { sendSupabaseOtp, verifySupabaseOtp, signOutSupabase } from '../lib/authSupabase';
 import { logCustomerAuthEvent } from '../lib/adminApi';
@@ -56,11 +60,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   onAddNewUser,
   onLogout,
 }) => {
-  // Authentication State (Meesho-style Mobile + OTP)
-  const [authStep, setAuthStep] = useState<'phone' | 'otp' | 'name_entry'>('phone');
-  const [inputPhone, setInputPhone] = useState('');
-  const [inputOtp, setInputOtp] = useState('');
+  // Authentication State (Email ID + Mandatory Name + OTP)
+  const [authStep, setAuthStep] = useState<'email' | 'otp'>('email');
   const [inputName, setInputName] = useState('');
+  const [inputEmail, setInputEmail] = useState('');
+  const [inputOtp, setInputOtp] = useState('');
+  const [inputPhone, setInputPhone] = useState('');
   const [authError, setAuthError] = useState('');
   const [authNotice, setAuthNotice] = useState('');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
@@ -78,6 +83,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   // Address Editing State
   const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPhone, setEditPhone] = useState('');
   const [editStreet, setEditStreet] = useState('');
   const [editCity, setEditCity] = useState('');
   const [editState, setEditState] = useState('');
@@ -109,15 +116,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   useEffect(() => {
     if (currentUser) {
       setEditName(currentUser.name || '');
+      setEditEmail(currentUser.email || '');
+      setEditPhone(currentUser.phone || '');
       setEditStreet(currentUser.address || '');
       setEditCity(currentUser.city || '');
       setEditState('Telangana');
       setEditPincode('504103');
 
-      // Load live orders and returns from database / API
-      if (currentUser.phone) {
+      // Load live orders and returns from database / API using email or phone
+      const customerIdentifier = currentUser.email || currentUser.phone || currentUser.id;
+      if (customerIdentifier) {
         setIsLoadingProfile(true);
-        fetchCustomerProfile(currentUser.phone)
+        fetchCustomerProfile(customerIdentifier)
           .then((res) => {
             if (res.orders) {
               setCustomerOrders(res.orders);
@@ -133,35 +143,47 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Step 1: Send OTP handler (Supabase signInWithOtp)
+  // Step 1: Send OTP to Email (Name is mandatory *)
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
     setAuthNotice('');
-    const clean = normalizePhone(inputPhone);
-    if (!clean || clean.length < 10) {
-      setAuthError('Please enter a valid 10-digit Indian mobile number.');
+
+    const cleanName = inputName.trim();
+    const cleanEmail = inputEmail.trim().toLowerCase();
+
+    if (!cleanName || cleanName.length < 2) {
+      setAuthError('Please enter your Full Name (* mandatory).');
+      return;
+    }
+
+    if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+      setAuthError('Please enter a valid Email ID (* mandatory).');
       return;
     }
 
     setIsSendingOtp(true);
     try {
-      console.log('[UserProfileModal] Initiating Supabase OTP dispatch for:', clean);
-      const res = await sendSupabaseOtp(clean, 'phone');
+      console.log('[UserProfileModal] Requesting Email OTP for:', cleanEmail, 'Name:', cleanName);
+      const res = await sendCustomerEmailOtp(cleanEmail, cleanName);
       if (res.success) {
         setAuthStep('otp');
         setInputOtp(res.otp || '');
         setOtpTimer(30);
-        setAuthNotice(res.message || `Verification code sent to +91 ${clean}`);
+        setAuthNotice(
+          res.otp
+            ? `Verification code sent to ${cleanEmail} (Your OTP: ${res.otp})`
+            : res.message || `Verification code sent to ${cleanEmail}`
+        );
       } else {
         setAuthError(res.error || 'Failed to send OTP. Please try again.');
       }
     } catch (err: any) {
-      console.error('[UserProfileModal] OTP send exception:', err);
+      console.error('[UserProfileModal] Email OTP send exception:', err);
       setAuthStep('otp');
       setInputOtp('');
       setOtpTimer(30);
-      setAuthNotice(`Verification code sent to +91 ${clean}`);
+      setAuthNotice(`Verification code sent to ${cleanEmail}`);
     } finally {
       setIsSendingOtp(false);
     }
@@ -174,12 +196,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     setAuthNotice('');
     setIsSendingOtp(true);
     try {
-      const clean = normalizePhone(inputPhone);
-      const res = await sendSupabaseOtp(clean, 'phone');
+      const cleanEmail = inputEmail.trim().toLowerCase();
+      const cleanName = inputName.trim() || 'Customer';
+      const res = await sendCustomerEmailOtp(cleanEmail, cleanName);
       if (res.success) {
         setOtpTimer(30);
         if (res.otp) setInputOtp(res.otp);
-        setAuthNotice(res.message || `New OTP sent to +91 ${clean}`);
+        setAuthNotice(
+          res.otp
+            ? `New OTP sent to ${cleanEmail} (Your OTP: ${res.otp})`
+            : res.message || `New OTP sent to ${cleanEmail}`
+        );
       } else {
         setAuthError(res.error || 'Failed to resend OTP.');
       }
@@ -188,50 +215,51 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     }
   };
 
-  // Step 2: Verify OTP & Log In (Supabase verifyOtp)
+  // Step 2: Verify Email OTP & Log In (Name & Email persisted)
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
     setAuthNotice('');
-    if (!inputOtp || inputOtp.length < 4) {
-      setAuthError('Please enter the 6-digit OTP code sent to your phone.');
+
+    if (!inputOtp || inputOtp.trim().length < 4) {
+      setAuthError('Please enter the 6-digit OTP code sent to your email.');
       return;
     }
 
     setIsAuthLoading(true);
     try {
-      const clean = normalizePhone(inputPhone);
-      console.log('[UserProfileModal] Calling verifySupabaseOtp with phone & token...');
-      const authRes = await verifySupabaseOtp(
-        clean,
-        inputOtp,
-        'phone',
-        {
-          name: inputName || 'Valued Customer',
-          address: 'Nilofar complex, main road, cloth market',
-          city: 'Bhainsa, Telangana, 504103',
-        }
+      const cleanEmail = inputEmail.trim().toLowerCase();
+      const cleanName = inputName.trim() || cleanEmail.split('@')[0];
+      console.log('[UserProfileModal] Calling verifyCustomerEmailOtp with email & token...');
+
+      const authRes = await verifyCustomerEmailOtp(
+        cleanEmail,
+        inputOtp.trim(),
+        cleanName,
+        'Nilofar complex, main road, cloth market',
+        'Bhainsa, Telangana, 504103',
+        inputPhone.trim()
       );
 
       if (authRes.success && authRes.userProfile) {
         onAddNewUser(authRes.userProfile);
         setActiveSubpoint('main');
-        setAuthStep('phone');
+        setAuthStep('email');
         setInputOtp('');
         logCustomerAuthEvent({
           userId: authRes.userProfile.id,
-          userEmail: authRes.userProfile.email || `${clean}@anfaprintwear.in`,
+          userEmail: authRes.userProfile.email,
           userName: authRes.userProfile.name,
           eventType: 'login',
           status: 'success',
-          details: `Customer logged in via Supabase mobile OTP (+91 ${clean})`,
+          details: `Customer logged in via Email OTP (${cleanEmail})`,
         });
       } else {
         setAuthError(authRes.error || 'Verification failed. Please check the OTP and try again.');
       }
     } catch (err: any) {
       console.error('[UserProfileModal] OTP verification exception:', err);
-      setAuthError(err?.message || 'Unable to connect to auth server. Please try again.');
+      setAuthError(err?.message || 'Unable to verify code. Please try again.');
     } finally {
       setIsAuthLoading(false);
     }
@@ -246,21 +274,24 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
     const fullAddress = editStreet.trim();
     const fullCity = `${editCity.trim()}${editState ? ', ' + editState.trim() : ''}${editPincode ? ', ' + editPincode.trim() : ''}`;
+    const targetIdentifier = currentUser.email || currentUser.phone || currentUser.id;
 
     try {
-      if (currentUser.phone) {
-        await updateCustomerAddressAndProfile(currentUser.phone, {
-          name: editName.trim() || currentUser.name,
-          address: fullAddress,
-          city: editCity.trim(),
-          state: editState.trim(),
-          pincode: editPincode.trim(),
-        });
-      }
+      await updateCustomerAddressAndProfile(targetIdentifier, {
+        name: editName.trim() || currentUser.name,
+        email: editEmail.trim() || currentUser.email,
+        phone: editPhone.trim() || currentUser.phone,
+        address: fullAddress,
+        city: editCity.trim(),
+        state: editState.trim(),
+        pincode: editPincode.trim(),
+      });
 
       onUpdateProfile({
         ...currentUser,
         name: editName.trim() || currentUser.name,
+        email: editEmail.trim() || currentUser.email,
+        phone: editPhone.trim() || currentUser.phone,
         address: fullAddress,
         city: fullCity,
       });
@@ -273,6 +304,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       onUpdateProfile({
         ...currentUser,
         name: editName.trim() || currentUser.name,
+        email: editEmail.trim() || currentUser.email,
+        phone: editPhone.trim() || currentUser.phone,
         address: fullAddress,
         city: fullCity,
       });
@@ -347,7 +380,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             <div>
               <h3 className="font-['Oswald'] text-base font-bold tracking-wider uppercase">
                 {!currentUser
-                  ? 'CUSTOMER LOGIN'
+                  ? 'CUSTOMER LOGIN / REGISTER'
                   : activeSubpoint === 'orders'
                   ? 'MY ORDERS'
                   : activeSubpoint === 'address'
@@ -357,7 +390,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   : 'MY ACCOUNT'}
               </h3>
               <p className="text-xs text-neutral-400">
-                {currentUser ? `+91 ${currentUser.phone || '9603344954'}` : 'Simple Mobile & OTP Verification'}
+                {currentUser ? (currentUser.email || currentUser.name) : 'Login with Name & Email OTP'}
               </p>
             </div>
           </div>
@@ -370,27 +403,27 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         </div>
 
         {/* ------------------------------------------------------------- */}
-        {/* LOGGED OUT: SIMPLE MEESHO-STYLE MOBILE NUMBER & OTP LOGIN */}
+        {/* LOGGED OUT: EMAIL ID & MANDATORY NAME OTP LOGIN               */}
         {/* ------------------------------------------------------------- */}
         {!currentUser ? (
-          <div className="p-6 overflow-y-auto space-y-6">
+          <div className="p-6 overflow-y-auto space-y-5">
             {/* Banner / Info */}
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start space-x-3">
               <div className="w-8 h-8 rounded-xl bg-amber-400 text-black flex-shrink-0 flex items-center justify-center font-bold text-xs mt-0.5">
                 <Sparkles className="w-4 h-4" />
               </div>
               <div className="text-xs">
-                <p className="font-bold text-amber-900 text-sm">Quick & Secure Login</p>
+                <p className="font-bold text-amber-900 text-sm">Customer Email & OTP Login</p>
                 <p className="text-amber-800 mt-0.5">
-                  Log in like Meesho with just your <strong>10-digit mobile number</strong> and OTP. No complicated passwords required.
+                  Enter your <strong>Full Name (*)</strong> and <strong>Email ID (*)</strong> to receive your 6-digit OTP code. No password required.
                 </p>
               </div>
             </div>
 
             {authNotice && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center space-x-2 animate-fade-in">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{authNotice}</span>
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs rounded-xl flex items-start space-x-2.5 animate-fade-in">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <span className="font-medium">{authNotice}</span>
               </div>
             )}
 
@@ -401,63 +434,101 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               </div>
             )}
 
-            {authStep === 'phone' ? (
+            {authStep === 'email' ? (
               <form onSubmit={handleSendOtp} className="space-y-4">
+                {/* MANDATORY FULL NAME FIELD (*) */}
                 <div>
-                  <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-2">
-                    Enter Mobile Number
+                  <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span>
+                      Full Name <span className="text-rose-500 font-black text-sm">*</span>
+                    </span>
+                    <span className="text-[10px] text-rose-500 font-bold lowercase bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                      * mandatory
+                    </span>
                   </label>
                   <div className="relative flex items-center">
-                    <div className="absolute left-3.5 flex items-center space-x-1.5 text-neutral-600 font-semibold text-sm border-r border-neutral-300 pr-2">
-                      <span>🇮🇳</span>
-                      <span>+91</span>
+                    <div className="absolute left-3.5 text-neutral-400">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="text"
+                      value={inputName}
+                      onChange={(e) => setInputName(e.target.value)}
+                      placeholder="e.g. Abdul Raheem / Rahul Sharma"
+                      className="w-full pl-10 pr-4 py-2.5 text-sm font-semibold text-neutral-900 border-2 border-neutral-300 rounded-xl focus:border-amber-500 focus:outline-none transition"
+                      required
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                {/* MANDATORY EMAIL ID FIELD (*) */}
+                <div>
+                  <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span>
+                      Email Address <span className="text-rose-500 font-black text-sm">*</span>
+                    </span>
+                    <span className="text-[10px] text-rose-500 font-bold lowercase bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                      * mandatory
+                    </span>
+                  </label>
+                  <div className="relative flex items-center">
+                    <div className="absolute left-3.5 text-neutral-400">
+                      <Mail className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="email"
+                      value={inputEmail}
+                      onChange={(e) => setInputEmail(e.target.value)}
+                      placeholder="e.g. customer@example.com"
+                      className="w-full pl-10 pr-4 py-2.5 text-sm font-semibold text-neutral-900 border-2 border-neutral-300 rounded-xl focus:border-amber-500 focus:outline-none transition"
+                      required
+                    />
+                  </div>
+                  <p className="text-[11px] text-neutral-500 mt-1.5 flex items-center space-x-1">
+                    <span>💡</span>
+                    <span>A 6-digit verification OTP code will be sent to your email address.</span>
+                  </p>
+                </div>
+
+                {/* OPTIONAL PHONE NUMBER FIELD */}
+                <div>
+                  <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5">
+                    Mobile Number <span className="text-neutral-400 font-normal lowercase">(optional for order SMS updates)</span>
+                  </label>
+                  <div className="relative flex items-center">
+                    <div className="absolute left-3 flex items-center space-x-1 text-neutral-600 font-semibold text-xs border-r border-neutral-300 pr-2">
+                      <span>🇮🇳 +91</span>
                     </div>
                     <input
                       type="tel"
                       maxLength={10}
                       value={inputPhone}
                       onChange={(e) => setInputPhone(e.target.value.replace(/\D/g, ''))}
-                      placeholder="Enter 10-digit number"
-                      className="w-full pl-24 pr-4 py-3 text-base font-bold text-neutral-900 border-2 border-neutral-300 rounded-xl focus:border-amber-500 focus:outline-none transition"
-                      autoFocus
+                      placeholder="10-digit mobile number"
+                      className="w-full pl-20 pr-4 py-2.5 text-sm text-neutral-900 border border-neutral-300 rounded-xl focus:border-amber-500 focus:outline-none transition"
                     />
                   </div>
-                  <p className="text-[11px] text-neutral-500 mt-1.5 flex items-center space-x-1">
-                    <span>💡</span>
-                    <span>An SMS verification OTP will be sent to your mobile number.</span>
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5">
-                    Profile Name <span className="text-neutral-400 font-normal">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={inputName}
-                    onChange={(e) => setInputName(e.target.value)}
-                    placeholder="Enter your name"
-                    className="w-full px-4 py-2.5 text-sm border border-neutral-300 rounded-xl focus:border-amber-500 focus:outline-none transition"
-                  />
                 </div>
 
                 <button
                   type="submit"
-                  disabled={isSendingOtp || inputPhone.length < 10}
-                  className="w-full py-3 bg-amber-400 hover:bg-amber-500 disabled:bg-neutral-200 disabled:text-neutral-400 text-black font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center space-x-2"
+                  disabled={isSendingOtp || !inputName.trim() || !inputEmail.trim()}
+                  className="w-full py-3 bg-amber-400 hover:bg-amber-500 disabled:bg-neutral-200 disabled:text-neutral-400 text-black font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center space-x-2 mt-2"
                 >
                   {isSendingOtp ? (
-                    <span>Sending OTP SMS...</span>
+                    <span>Generating & Sending OTP...</span>
                   ) : (
                     <>
-                      <span>CONTINUE WITH OTP</span>
+                      <Mail className="w-4 h-4" />
+                      <span>SEND OTP TO EMAIL</span>
                       <ChevronRight className="w-4 h-4" />
                     </>
                   )}
                 </button>
 
                 <p className="text-center text-[11px] text-neutral-400">
-                  By continuing, you agree to ANFA's Terms & Conditions and Privacy Policy.
+                  By continuing, you agree to ANFA Printwear's Terms & Conditions and Privacy Policy.
                 </p>
               </form>
             ) : (
@@ -465,23 +536,30 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-xs font-bold text-neutral-700 uppercase tracking-wider">
-                      Enter 6-Digit OTP
+                      Enter 6-Digit Email OTP
                     </label>
                     <button
                       type="button"
                       onClick={() => {
-                        setAuthStep('phone');
+                        setAuthStep('email');
                         setAuthError('');
                         setAuthNotice('');
                       }}
-                      className="text-xs font-bold text-amber-600 hover:underline"
+                      className="text-xs font-bold text-amber-600 hover:underline flex items-center space-x-1"
                     >
-                      Change Number
+                      <Edit2 className="w-3 h-3" />
+                      <span>Change Email</span>
                     </button>
                   </div>
-                  <p className="text-xs text-neutral-500 mb-3">
-                    Verification code sent to <span className="font-bold text-neutral-800">+91 {inputPhone}</span>
-                  </p>
+
+                  <div className="bg-neutral-50 rounded-xl p-3 border border-neutral-200 mb-3 space-y-1">
+                    <p className="text-xs text-neutral-700">
+                      <strong>Name:</strong> {inputName}
+                    </p>
+                    <p className="text-xs text-neutral-700">
+                      <strong>Email:</strong> <span className="font-bold text-neutral-900">{inputEmail}</span>
+                    </p>
+                  </div>
 
                   <input
                     type="text"
@@ -495,7 +573,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 </div>
 
                 <div className="flex items-center justify-between text-xs text-neutral-500 px-1">
-                  <span>Didn't receive the SMS code?</span>
+                  <span>Didn't receive the email code?</span>
                   {otpTimer > 0 ? (
                     <span className="font-medium text-neutral-400">Resend in {otpTimer}s</span>
                   ) : (
@@ -512,15 +590,15 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
                 <button
                   type="submit"
-                  disabled={isAuthLoading || inputOtp.length < 4}
+                  disabled={isAuthLoading || inputOtp.trim().length < 4}
                   className="w-full py-3 bg-neutral-900 hover:bg-black disabled:bg-neutral-300 text-white font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center space-x-2"
                 >
                   {isAuthLoading ? (
-                    <span>Verifying Code...</span>
+                    <span>Verifying Code & Logging In...</span>
                   ) : (
                     <>
                       <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                      <span>VERIFY & LOG IN</span>
+                      <span>VERIFY OTP & LOG IN</span>
                     </>
                   )}
                 </button>
@@ -535,32 +613,40 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             {/* VIEW 1: MAIN SUBPOINTS HUB */}
             {activeSubpoint === 'main' && (
               <div className="space-y-4">
-                {/* Profile Card with Profile Name Idea Tooltip */}
+                {/* Profile Card with Profile Name & Verified Email */}
                 <div className="bg-neutral-900 text-white rounded-2xl p-4 flex items-center justify-between relative overflow-hidden">
                   <div className="flex items-center space-x-3.5 z-10">
-                    <div className="w-12 h-12 rounded-full bg-amber-400 text-black flex items-center justify-center font-bold text-lg shadow-md">
-                      {currentUser.name.charAt(0).toUpperCase()}
+                    <div className="w-12 h-12 rounded-full bg-amber-400 text-black flex items-center justify-center font-bold text-lg shadow-md shrink-0">
+                      {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'C'}
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center space-x-2">
-                        <h4 className="font-bold text-base text-white">{currentUser.name}</h4>
-                        <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center space-x-1">
+                        <h4 className="font-bold text-base text-white truncate">{currentUser.name}</h4>
+                        <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center space-x-1 shrink-0">
                           <CheckCircle2 className="w-3 h-3" />
                           <span>Verified</span>
                         </span>
                       </div>
-                      <p className="text-xs text-neutral-400 mt-0.5 flex items-center space-x-1">
-                        <Phone className="w-3 h-3 text-amber-400" />
-                        <span>+91 {currentUser.phone || '9603344954'}</span>
+                      <p className="text-xs text-neutral-300 mt-0.5 flex items-center space-x-1.5 truncate">
+                        <Mail className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span className="truncate">{currentUser.email || 'customer@anfaprintwear.in'}</span>
                       </p>
+                      {currentUser.phone && (
+                        <p className="text-[11px] text-neutral-400 mt-0.5 flex items-center space-x-1.5">
+                          <Phone className="w-3 h-3 text-neutral-400 shrink-0" />
+                          <span>+91 {currentUser.phone}</span>
+                        </p>
+                      )}
                     </div>
                   </div>
 
-                  {/* Profile Name Idea Hint */}
-                  <div className="hidden sm:flex flex-col items-end text-right z-10">
-                    <span className="text-[11px] text-neutral-400">Profile Name Idea:</span>
-                    <span className="text-xs text-amber-400 font-medium">Customer Full Name</span>
-                  </div>
+                  <button
+                    onClick={() => setIsEditingAddress(true)}
+                    className="p-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition shrink-0 ml-2"
+                    title="Edit Profile"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
                 </div>
 
                 {addressSaveSuccess && (
@@ -670,7 +756,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                           userName: currentUser.name,
                           eventType: 'logout',
                           status: 'success',
-                          details: `Customer logged out from account (+91 ${currentUser.phone})`,
+                          details: `Customer logged out (${currentUser.email})`,
                         });
                       }
                       if (onLogout) onLogout();
@@ -682,7 +768,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     <span>LOGOUT FROM THIS ACCOUNT</span>
                   </button>
                   <p className="text-center text-[10px] text-neutral-400 mt-2">
-                    Signed in on this device • Single mobile number authenticated
+                    Signed in on this device • Customer account authenticated
                   </p>
                 </div>
               </div>
@@ -703,7 +789,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     <Package className="w-10 h-10 text-neutral-300 mx-auto mb-2" />
                     <p className="font-bold text-sm text-neutral-700">No Orders Yet</p>
                     <p className="text-xs text-neutral-500 mt-1">
-                      Your orders placed with mobile number +91 {currentUser.phone} will show here.
+                      Orders placed with {currentUser.email || `mobile ${currentUser.phone}`} will show here.
                     </p>
                   </div>
                 ) : (
@@ -776,7 +862,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               </div>
             )}
 
-            {/* VIEW 3: SUBPOINT 2 - MY SAVED ADDRESS */}
+            {/* VIEW 3: SUBPOINT 2 - MY SAVED ADDRESS & PROFILE */}
             {activeSubpoint === 'address' && (
               <div className="space-y-4">
                 {!isEditingAddress ? (
@@ -784,7 +870,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     <div className="bg-white border-2 border-neutral-200 rounded-2xl p-4 shadow-sm space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">
-                          Primary Delivery Address
+                          Primary Delivery Profile & Address
                         </span>
                         <button
                           onClick={() => setIsEditingAddress(true)}
@@ -805,8 +891,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                           India
                         </p>
                         <p className="text-xs text-neutral-500 font-semibold mt-2">
-                          Contact: +91 {currentUser.phone || '9603344954'}
+                          Email: {currentUser.email || 'customer@anfaprintwear.in'}
                         </p>
+                        {currentUser.phone && (
+                          <p className="text-xs text-neutral-500 font-semibold mt-0.5">
+                            Contact: +91 {currentUser.phone}
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -822,7 +913,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   <form onSubmit={handleSaveAddress} className="space-y-3">
                     <div>
                       <label className="block text-xs font-bold text-neutral-700 uppercase mb-1">
-                        Full Name / Receiver Name
+                        Full Name / Receiver Name <span className="text-rose-500">*</span>
                       </label>
                       <input
                         type="text"
@@ -835,7 +926,33 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
                     <div>
                       <label className="block text-xs font-bold text-neutral-700 uppercase mb-1">
-                        House / Flat / Shop / Street Address
+                        Email Address <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="email"
+                        value={editEmail}
+                        onChange={(e) => setEditEmail(e.target.value)}
+                        className="w-full px-3.5 py-2 text-sm border border-neutral-300 rounded-xl focus:border-amber-500 focus:outline-none"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-neutral-700 uppercase mb-1">
+                        Contact Phone Number
+                      </label>
+                      <input
+                        type="tel"
+                        value={editPhone}
+                        onChange={(e) => setEditPhone(e.target.value)}
+                        placeholder="10-digit phone"
+                        className="w-full px-3.5 py-2 text-sm border border-neutral-300 rounded-xl focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-neutral-700 uppercase mb-1">
+                        House / Flat / Shop / Street Address <span className="text-rose-500">*</span>
                       </label>
                       <input
                         type="text"
@@ -850,7 +967,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-bold text-neutral-700 uppercase mb-1">
-                          City / Town
+                          City / Town <span className="text-rose-500">*</span>
                         </label>
                         <input
                           type="text"
@@ -863,7 +980,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-neutral-700 uppercase mb-1">
-                          Pincode
+                          Pincode <span className="text-rose-500">*</span>
                         </label>
                         <input
                           type="text"
@@ -1033,8 +1150,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                               onClick={() => setExchangeSize(s)}
                               className={`flex-1 py-1.5 text-xs font-bold rounded-lg border ${
                                 exchangeSize === s
-                                  ? 'bg-neutral-900 text-white border-neutral-900'
-                                  : 'bg-white text-neutral-700 border-neutral-300'
+                                    ? 'bg-neutral-900 text-white border-neutral-900'
+                                    : 'bg-white text-neutral-700 border-neutral-300'
                               }`}
                             >
                               {s}
@@ -1083,3 +1200,4 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     </div>
   );
 };
+

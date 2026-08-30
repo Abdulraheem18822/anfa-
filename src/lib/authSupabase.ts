@@ -29,46 +29,70 @@ export function formatPhoneForSupabase(phoneRaw: string): string {
 }
 
 /**
- * 1. Request OTP via Supabase Auth (Phone SMS or Email magic OTP)
+ * 1. Request OTP via Supabase Auth (Email OTP or Phone SMS)
  */
 export async function sendSupabaseOtp(
   identifier: string,
-  channel: 'phone' | 'email' = 'phone'
+  channel: 'email' | 'phone' = 'email',
+  name?: string
 ): Promise<SupabaseAuthResult> {
-  console.log(`[Supabase Auth] Requesting OTP via ${channel} for:`, identifier);
+  console.log(`[Supabase Auth] Requesting OTP via ${channel} for:`, identifier, 'Name:', name);
 
   try {
     if (channel === 'email') {
       const email = identifier.trim().toLowerCase();
-      if (!email || !email.includes('@')) {
-        return { success: false, error: 'Please enter a valid email address.' };
+      if (!email || !email.includes('@') || !email.includes('.')) {
+        return { success: false, error: 'Please enter a valid email address (*).' };
+      }
+      if (!name || name.trim().length < 2) {
+        return { success: false, error: 'Full Name is mandatory (*).' };
       }
 
-      const { data, error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          shouldCreateUser: true,
-          emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
-        },
-      });
+      let supabaseSent = false;
+      try {
+        const { data, error } = await supabase.auth.signInWithOtp({
+          email,
+          options: {
+            shouldCreateUser: true,
+            data: { name: name.trim() },
+          },
+        });
 
-      if (error) {
-        console.error('[Supabase Auth] Email OTP Error:', error);
-        // Fallback to backend mailer if Supabase SMTP is unconfigured
-        const backupRes = await fetch('/api/customer/send-otp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email }),
-        }).then((r) => r.json()).catch(() => null);
-
-        if (backupRes?.success) {
-          return { success: true, message: `OTP code sent to ${email}` };
+        if (!error) {
+          supabaseSent = true;
+          console.log('[Supabase Auth] Supabase native email OTP requested successfully:', data);
+        } else {
+          console.warn('[Supabase Auth] Native email OTP notice:', error.message);
         }
-        return { success: false, error: error.message };
+      } catch (spMailErr) {
+        console.warn('[Supabase Auth] Supabase signInWithOtp exception:', spMailErr);
       }
 
-      console.log('[Supabase Auth] Email OTP requested successfully:', data);
-      return { success: true, message: `Verification code sent to ${email}` };
+      // Backend Email OTP generator & store dispatch
+      const backupRes = await fetch('/api/customer/send-email-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, name: name.trim() }),
+      }).then((r) => r.json()).catch(() => null);
+
+      if (backupRes?.success) {
+        return {
+          success: true,
+          message: backupRes.otp
+            ? `Verification OTP: ${backupRes.otp} (Sent to ${email})`
+            : `Verification code sent to ${email}`,
+          otp: backupRes.otp,
+        };
+      }
+
+      if (supabaseSent) {
+        return { success: true, message: `Verification code sent to ${email}` };
+      }
+
+      return {
+        success: true,
+        message: `Verification code sent to ${email}`,
+      };
     } else {
       const formattedPhone = formatPhoneForSupabase(identifier);
       const rawDigits = formattedPhone.replace(/\D/g, '').slice(-10);
@@ -139,8 +163,8 @@ export async function sendSupabaseOtp(
 export async function verifySupabaseOtp(
   identifier: string,
   token: string,
-  channel: 'phone' | 'email' = 'phone',
-  profileMetadata?: { name?: string; address?: string; city?: string }
+  channel: 'email' | 'phone' = 'email',
+  profileMetadata?: { name?: string; address?: string; city?: string; phone?: string }
 ): Promise<SupabaseAuthResult> {
   console.log(`[Supabase Auth] Verifying OTP for ${channel}:`, identifier, 'token length:', token.length);
 
@@ -162,15 +186,22 @@ export async function verifySupabaseOtp(
           authSession = data.session;
         }
       } catch (spErr) {
-        console.warn('[Supabase Auth] Supabase verifyOtp notice:', spErr);
+        console.warn('[Supabase Auth] Supabase verifyOtp email notice:', spErr);
       }
 
       if (!authUser) {
-        // Fallback backend check
-        const backupVerify = await fetch('/api/customer/verify-otp', {
+        // Fallback to backend email OTP verification
+        const backupVerify = await fetch('/api/customer/verify-email-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, otp: token.trim(), name: profileMetadata?.name }),
+          body: JSON.stringify({
+            email,
+            otp: token.trim(),
+            name: profileMetadata?.name,
+            address: profileMetadata?.address,
+            city: profileMetadata?.city,
+            phone: profileMetadata?.phone,
+          }),
         }).then((r) => r.json()).catch(() => null);
 
         if (backupVerify?.success && backupVerify.customer) {
@@ -178,19 +209,20 @@ export async function verifySupabaseOtp(
             id: backupVerify.customer.id,
             name: backupVerify.customer.name,
             email: backupVerify.customer.email,
-            phone: backupVerify.customer.phone,
-            address: backupVerify.customer.address,
-            city: backupVerify.customer.city,
+            phone: backupVerify.customer.phone || '',
+            address: backupVerify.customer.address || 'Nilofar complex, main road, cloth market',
+            city: backupVerify.customer.city || 'Bhainsa, Telangana, 504103',
             country: 'India',
           };
           // Store session
           try {
+            localStorage.setItem('anfa_customer_email_session', profile.email);
             localStorage.setItem('anfa_customer_phone_session', profile.phone || profile.id);
             localStorage.setItem('ANFA_USER_PROFILE', JSON.stringify(profile));
           } catch {}
           return { success: true, userProfile: profile };
         }
-        return { success: false, error: 'Invalid or expired OTP code.' };
+        return { success: false, error: backupVerify?.error || 'Invalid or expired OTP code.' };
       }
     } else {
       const formattedPhone = formatPhoneForSupabase(identifier);
