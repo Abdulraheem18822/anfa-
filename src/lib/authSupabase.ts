@@ -78,20 +78,18 @@ export async function sendSupabaseOtp(
       if (backupRes?.success) {
         return {
           success: true,
-          message: backupRes.otp
-            ? `Verification OTP: ${backupRes.otp} (Sent to ${email})`
-            : `Verification code sent to ${email}`,
+          message: `Verification code has been sent directly to your email (${email}).`,
           otp: backupRes.otp,
         };
       }
 
       if (supabaseSent) {
-        return { success: true, message: `Verification code sent to ${email}` };
+        return { success: true, message: `Verification code has been sent directly to your email (${email}).` };
       }
 
       return {
         success: true,
-        message: `Verification code sent to ${email}`,
+        message: `Verification code has been sent directly to your email (${email}).`,
       };
     } else {
       const formattedPhone = formatPhoneForSupabase(identifier);

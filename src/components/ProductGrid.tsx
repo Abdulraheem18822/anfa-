@@ -200,10 +200,11 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                   id={`product-card-${product.id}`}
                   className="group flex flex-col items-center text-center select-none"
                 >
-                  {/* Product T-Shirt Image / Mockup Card with Hover & Tap Actions */}
+                  {/* Product T-Shirt Image / Mockup Card with Direct Add to Cart & Hover Actions */}
                   <div
-                    onClick={() => onQuickView(product)}
-                    className="relative w-full aspect-square max-w-[260px] flex items-center justify-center p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-neutral-50/70 border border-neutral-100 group-hover:border-neutral-200 group-hover:shadow-lg transition-all duration-300 cursor-pointer"
+                    onClick={() => handleAdd(product)}
+                    className="relative w-full aspect-square max-w-[260px] flex items-center justify-center p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-neutral-50/70 border border-neutral-100 group-hover:border-amber-300 group-hover:shadow-lg transition-all duration-300 cursor-pointer"
+                    title="Click to Add to Cart"
                   >
                     {/* Badge */}
                     {product.badge && (
@@ -249,7 +250,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                           onQuickView(product);
                         }}
                         className="bg-white hover:bg-neutral-900 text-neutral-800 hover:text-white p-1.5 sm:p-2 rounded-full shadow-md transition active:scale-95"
-                        title="Quick View Sizing & DTG Specs"
+                        title="View Sizing & DTG Specs"
                       >
                         <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       </button>
@@ -290,10 +291,11 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                     ))}
                   </div>
 
-                  {/* Product Title (Smaller on mobile) */}
+                  {/* Product Title - Click adds to cart */}
                   <h3
-                    onClick={() => onQuickView(product)}
+                    onClick={() => handleAdd(product)}
                     className="text-[11px] sm:text-xs md:text-sm font-semibold text-neutral-800 hover:text-amber-600 transition cursor-pointer mt-1 sm:mt-1.5 line-clamp-1 max-w-[240px]"
+                    title="Click to Add to Cart"
                   >
                     {product.name}
                   </h3>

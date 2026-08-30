@@ -165,15 +165,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     setIsSendingOtp(true);
     try {
       console.log('[UserProfileModal] Requesting Email OTP for:', cleanEmail, 'Name:', cleanName);
-      const res = await sendCustomerEmailOtp(cleanEmail, cleanName);
+      const res = await sendSupabaseOtp(cleanEmail, 'email', cleanName);
       if (res.success) {
         setAuthStep('otp');
-        setInputOtp(res.otp || '');
+        setInputOtp('');
         setOtpTimer(30);
         setAuthNotice(
-          res.otp
-            ? `Verification code sent to ${cleanEmail} (Your OTP: ${res.otp})`
-            : res.message || `Verification code sent to ${cleanEmail}`
+          `A 6-digit verification code has been sent directly to your email (${cleanEmail}). Please check your inbox and spam/junk folder.`
         );
       } else {
         setAuthError(res.error || 'Failed to send OTP. Please try again.');
@@ -183,7 +181,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       setAuthStep('otp');
       setInputOtp('');
       setOtpTimer(30);
-      setAuthNotice(`Verification code sent to ${cleanEmail}`);
+      setAuthNotice(`A verification code has been sent directly to your email (${cleanEmail}).`);
     } finally {
       setIsSendingOtp(false);
     }
@@ -198,18 +196,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     try {
       const cleanEmail = inputEmail.trim().toLowerCase();
       const cleanName = inputName.trim() || 'Customer';
-      const res = await sendCustomerEmailOtp(cleanEmail, cleanName);
+      const res = await sendSupabaseOtp(cleanEmail, 'email', cleanName);
       if (res.success) {
         setOtpTimer(30);
-        if (res.otp) setInputOtp(res.otp);
+        setInputOtp('');
         setAuthNotice(
-          res.otp
-            ? `New OTP sent to ${cleanEmail} (Your OTP: ${res.otp})`
-            : res.message || `New OTP sent to ${cleanEmail}`
+          `A fresh verification code has been sent directly to your email (${cleanEmail}).`
         );
       } else {
         setAuthError(res.error || 'Failed to resend OTP.');
       }
+    } catch (err: any) {
+      setAuthError('Failed to resend OTP.');
     } finally {
       setIsSendingOtp(false);
     }

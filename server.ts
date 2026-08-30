@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
+import nodemailer from 'nodemailer';
 
 // ES Module resolution
 const __filename = fileURLToPath(import.meta.url);
@@ -1613,6 +1614,62 @@ function cleanPhone(raw: string): string {
   return digits;
 }
 
+// Helper to send real OTP email via SMTP if credentials are provided
+async function dispatchEmailViaSmtp(toEmail: string, recipientName: string, otp: string): Promise<boolean> {
+  const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || 'abdulraheem18822@gmail.com';
+  const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASSWORD;
+  const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+  const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
+
+  if (!smtpPass) {
+    console.log('[ANFA Email Service] SMTP password not set in server env, relying on Supabase SMTP dispatch.');
+    return false;
+  }
+
+  try {
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass.replace(/\s+/g, ''), // Strip any accidental spaces from app passwords
+      },
+    });
+
+    const info = await transporter.sendMail({
+      from: `"ANFA Printwear" <${smtpUser}>`,
+      to: toEmail,
+      subject: `Your ANFA Printwear Verification OTP: ${otp}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 540px; margin: 0 auto; padding: 24px; border: 1px solid #e5e5e5; border-radius: 16px; background: #ffffff;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <h1 style="font-size: 22px; font-weight: 800; color: #111; margin: 0; text-transform: uppercase; letter-spacing: 1px;">ANFA PRINTWEAR</h1>
+            <p style="font-size: 12px; color: #666; margin: 4px 0 0 0;">Customer Account Verification</p>
+          </div>
+          <div style="background: #fafafa; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #f0f0f0;">
+            <p style="font-size: 14px; color: #333; margin: 0 0 12px 0;">Hello <strong>${recipientName || 'Valued Customer'}</strong>,</p>
+            <p style="font-size: 13px; color: #555; margin: 0 0 16px 0;">Use the 6-digit verification code below to access your account:</p>
+            <div style="background: #f59e0b; color: #000000; font-size: 28px; font-weight: 900; letter-spacing: 6px; padding: 14px 28px; border-radius: 10px; display: inline-block; font-family: monospace; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);">
+              ${otp}
+            </div>
+            <p style="font-size: 11px; color: #888; margin: 16px 0 0 0;">This OTP is valid for 10 minutes. Please do not share it with anyone.</p>
+          </div>
+          <div style="text-align: center; margin-top: 20px; font-size: 11px; color: #999;">
+            <p style="margin: 0;">ANFA Printwear • Nilofar Complex, Main Road, Cloth Market, Bhainsa, Telangana 504103</p>
+          </div>
+        </div>
+      `,
+    });
+
+    console.log(`[ANFA Email Service] SMTP Email dispatched successfully to ${toEmail}. MessageId: ${info.messageId}`);
+    return true;
+  } catch (err: any) {
+    console.error(`[ANFA Email Service] Direct SMTP dispatch error for ${toEmail}:`, err?.message || err);
+    return false;
+  }
+}
+
 // POST /api/customer/send-email-otp - Generate 6-digit OTP for Email ID + Name
 app.post('/api/customer/send-email-otp', async (req: Request, res: Response) => {
   try {
@@ -1635,16 +1692,30 @@ app.post('/api/customer/send-email-otp', async (req: Request, res: Response) => 
 
     console.log(`[ANFA Email Service] Generated OTP for customer "${name}" (${email}): ${generatedOtp} (Expires in 10 mins)`);
 
-    // Dispatch email via Supabase Auth or SMTP if available
+    // 1. Try Direct SMTP (Nodemailer)
+    let directSent = false;
+    try {
+      directSent = await dispatchEmailViaSmtp(email, name, generatedOtp);
+    } catch (e) {
+      console.warn('[ANFA Email Service] Direct SMTP attempt failed:', e);
+    }
+
+    // 2. Dispatch email via Supabase Auth signInWithOtp
+    let supabaseSent = false;
     try {
       if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
-        await supabase.auth.signInWithOtp({
+        const { data, error } = await supabase.auth.signInWithOtp({
           email,
           options: {
             data: { name },
           },
         });
-        console.log(`[ANFA Email Service] Supabase native email OTP triggered for: ${email}`);
+        if (!error) {
+          supabaseSent = true;
+          console.log(`[ANFA Email Service] Supabase native email OTP triggered for: ${email}`);
+        } else {
+          console.warn('[ANFA Email Service] Supabase email dispatch error:', error.message);
+        }
       }
     } catch (spMailErr) {
       console.warn('[ANFA Email Service] Supabase email dispatch notice:', spMailErr);
@@ -1656,6 +1727,8 @@ app.post('/api/customer/send-email-otp', async (req: Request, res: Response) => 
       otp: generatedOtp,
       email,
       name,
+      deliveredViaSmtp: directSent,
+      supabaseSent,
     });
   } catch (error) {
     console.error('Error in send-email-otp:', error);
