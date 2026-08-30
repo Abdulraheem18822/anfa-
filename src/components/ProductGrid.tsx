@@ -200,11 +200,11 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                   id={`product-card-${product.id}`}
                   className="group flex flex-col items-center text-center select-none"
                 >
-                  {/* Product T-Shirt Image / Mockup Card with Direct Add to Cart & Hover Actions */}
+                  {/* Product T-Shirt Image / Mockup Card - Clicking opens Product Detail Page */}
                   <div
-                    onClick={() => handleAdd(product)}
+                    onClick={() => onQuickView(product)}
                     className="relative w-full aspect-square max-w-[260px] flex items-center justify-center p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-neutral-50/70 border border-neutral-100 group-hover:border-amber-300 group-hover:shadow-lg transition-all duration-300 cursor-pointer"
-                    title="Click to Add to Cart"
+                    title="Click to View Product Details & Buy"
                   >
                     {/* Badge */}
                     {product.badge && (
@@ -291,11 +291,11 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                     ))}
                   </div>
 
-                  {/* Product Title - Click adds to cart */}
+                  {/* Product Title - Clicking opens Product Detail Page */}
                   <h3
-                    onClick={() => handleAdd(product)}
+                    onClick={() => onQuickView(product)}
                     className="text-[11px] sm:text-xs md:text-sm font-semibold text-neutral-800 hover:text-amber-600 transition cursor-pointer mt-1 sm:mt-1.5 line-clamp-1 max-w-[240px]"
-                    title="Click to Add to Cart"
+                    title="Click to View Product Details & Buy"
                   >
                     {product.name}
                   </h3>

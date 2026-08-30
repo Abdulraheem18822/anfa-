@@ -29,6 +29,13 @@ interface ProductDetailPageProps {
     selectedSize?: string,
     quantity?: number
   ) => void;
+  onBuyNow?: (
+    product: Product,
+    selectedColorHex?: string,
+    selectedColorName?: string,
+    selectedSize?: string,
+    quantity?: number
+  ) => void;
   onToggleWishlist: (productId: string) => void;
   isWishlisted: boolean;
   allProducts?: Product[];
@@ -41,6 +48,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   settings,
   onBack,
   onAddToCart,
+  onBuyNow,
   onToggleWishlist,
   isWishlisted,
   allProducts = [],
@@ -98,9 +106,12 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   };
 
   const handleBuyNowClick = () => {
-    onAddToCart(product, selectedColor.hex, selectedColor.name, selectedSize, quantity);
-    // Directly proceed to cart or toast
-    setIsAddedSuccess(true);
+    if (onBuyNow) {
+      onBuyNow(product, selectedColor.hex, selectedColor.name, selectedSize, quantity);
+    } else {
+      onAddToCart(product, selectedColor.hex, selectedColor.name, selectedSize, quantity);
+      setIsAddedSuccess(true);
+    }
   };
 
   const handleShare = () => {

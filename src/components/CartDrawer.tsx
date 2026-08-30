@@ -43,6 +43,7 @@ interface CartDrawerProps {
   onUpdateQuantity: (id: string, delta: number) => void;
   onRemoveItem: (id: string) => void;
   onClearCart: () => void;
+  onProceedToCheckout?: () => void;
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
@@ -54,6 +55,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onUpdateQuantity,
   onRemoveItem,
   onClearCart,
+  onProceedToCheckout,
 }) => {
   if (!isOpen) return null;
 
@@ -210,6 +212,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
   const handleProceedToPaymentPage = () => {
     if (cartItems.length === 0) return;
+    if (onProceedToCheckout) {
+      onClose();
+      onProceedToCheckout();
+      return;
+    }
     setCheckoutError(null);
     setCurrentStep('checkout');
   };

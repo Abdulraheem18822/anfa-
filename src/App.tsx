@@ -23,6 +23,7 @@ import { InstagramGallery } from './components/InstagramGallery';
 import { ValueGuarantees } from './components/ValueGuarantees';
 import { Footer } from './components/Footer';
 import { ProductDetailPage } from './components/ProductDetailPage';
+import { CheckoutPage } from './components/CheckoutPage';
 import { CartDrawer } from './components/CartDrawer';
 import { WishlistDrawer } from './components/WishlistDrawer';
 import { PODStudioModal } from './components/PODStudioModal';
@@ -155,15 +156,29 @@ export default function App() {
   const [isPODStudioOpen, setIsPODStudioOpen] = useState<boolean>(false);
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
   const [isStoreAdminOpen, setIsStoreAdminOpen] = useState<boolean>(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState<boolean>(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
-  // Dynamic Catalog State (Synced with Backend / Admin edits)
+  // Dynamic Catalog State (Synced with Backend / Admin edits / Local Cache)
   const [catalogProducts, setCatalogProducts] = useState<Product[]>(MOCK_PRODUCTS);
 
   const refreshCatalog = async (directProducts?: Product[]) => {
+    let localCustom: Product[] = [];
+    try {
+      const raw = localStorage.getItem('ANFA_CUSTOM_CATALOG_PRODUCTS');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) localCustom = parsed;
+      }
+    } catch {
+      // ignore
+    }
+
     if (directProducts && directProducts.length > 0) {
       setCatalogProducts(directProducts.filter((p) => p.isLive !== false));
+      return;
     }
+
     try {
       const res = await fetch('/api/products');
       if (res.ok) {
@@ -171,12 +186,29 @@ export default function App() {
         if (text && text.trim()) {
           const json = JSON.parse(text);
           if (json.success && Array.isArray(json.products) && json.products.length > 0) {
-            setCatalogProducts(json.products);
+            const productMap = new Map<string, Product>();
+            json.products.forEach((p: Product) => productMap.set(p.id, p));
+            localCustom.forEach((p: Product) => {
+              if (!productMap.has(p.id)) {
+                productMap.set(p.id, p);
+              }
+            });
+            setCatalogProducts(Array.from(productMap.values()));
+            return;
           }
         }
       }
     } catch {
-      // Keep MOCK_PRODUCTS fallback
+      // Fallback
+    }
+
+    if (localCustom.length > 0) {
+      const productMap = new Map<string, Product>();
+      localCustom.forEach((p) => productMap.set(p.id, p));
+      MOCK_PRODUCTS.forEach((p) => {
+        if (!productMap.has(p.id)) productMap.set(p.id, p);
+      });
+      setCatalogProducts(Array.from(productMap.values()));
     }
   };
 
@@ -482,7 +514,22 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1">
-        {selectedProduct ? (
+        {isCheckoutOpen ? (
+          /* Full Page Express Checkout & Payment View */
+          <CheckoutPage
+            cartItems={currentCartItems}
+            settings={settings}
+            currentUser={currentUser}
+            onBack={() => {
+              setIsCheckoutOpen(false);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            onOrderSuccess={() => {
+              // Order completed with confetti on checkout page
+            }}
+            onClearCart={handleClearCart}
+          />
+        ) : selectedProduct ? (
           /* Full Page Product Detail View with Border and Specifications */
           <ProductDetailPage
             product={selectedProduct}
@@ -492,6 +539,12 @@ export default function App() {
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             onAddToCart={handleAddToCart}
+            onBuyNow={(prod, colorHex, colorName, size, qty) => {
+              handleAddToCart(prod, colorHex, colorName, size, qty);
+              setIsCartOpen(false);
+              setIsCheckoutOpen(true);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
             onToggleWishlist={handleToggleWishlist}
             isWishlisted={currentWishlistIds.includes(selectedProduct.id)}
             allProducts={catalogProducts}
@@ -677,6 +730,11 @@ export default function App() {
         onUpdateQuantity={handleUpdateQuantity}
         onRemoveItem={handleRemoveCartItem}
         onClearCart={handleClearCart}
+        onProceedToCheckout={() => {
+          setIsCartOpen(false);
+          setIsCheckoutOpen(true);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
       />
 
       {/* Wishlist Drawer */}
